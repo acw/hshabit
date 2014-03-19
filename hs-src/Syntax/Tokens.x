@@ -1,6 +1,8 @@
 {
+{-# OPTIONS_GHC -w #-}
 module Syntax.Tokens( Lexeme(..)
                     , FloatVal(..)
+                    , AlexPosn(..), nopos
                     , Alex
                     , alexEOF
                     , tokenize
@@ -40,11 +42,12 @@ habit :-
 
 "{-"                                                           { run_comment }
 
-<0> "area"     | "bitdata"  | "case"     | "class"    | "data"     |
-    "deriving" | "do"       | "else"     | "fails"    | "if"       |
-    "in"       | "infix"    | "infixl"   | "infixr"   | "instance" |
-    "lab"      | "let"      | "of"       | "struct"   | "then"     |
-    "type"     | "where"                                       { mkReservedId }
+<0> "area"     | "as"       | "bitdata"  | "case"     | "class"    |
+    "data"     | "deriving" | "do"       | "else"     | "extends"  |
+    "fails"    | "hiding"   | "if"       | "import"   | "in"       |
+    "infix"    | "infixl"   | "infixr"   | "instance" | "lab"      |
+    "let"      | "module"   | "of"       | "qualified"| "struct"   |
+    "then"     | "type"     | "where"                          { mkReservedId }
 
 <0> "("        | ")"        | "|"        | "="        | ","        |
     "`"        | "{"        | ";"        | "}"        | "["        |
@@ -497,6 +500,7 @@ nextToken = do
 
 tokenize :: (Lexeme -> Alex a) -> Alex a
 tokenize f = nextToken >>= f
+-- tokenize f = nextToken >>= (\ x -> trace (show x) (f x))
 
 runParser :: FilePath -> ByteString -> Alex a -> Either String a
 runParser _ bstr = runAlex bstr

@@ -1,7 +1,9 @@
-{
-module Syntax.Parser(parseHabit) where
+{ module Syntax.Parser(parseHabit) where
 
+import Data.ByteString.Lazy(ByteString,unpack)
+import Data.Char(chr)
 import Syntax.Tokens
+
 }
 
 %name parseHabit
@@ -11,6 +13,7 @@ import Syntax.Tokens
 %tokentype { Lexeme }
 %token
   "area"        { ReservedId $$ "area" }
+  "as"          { ReservedId $$ "as" }
   "bitdata"     { ReservedId $$ "bitdata" }
   "case"        { ReservedId $$ "case" }
   "class"       { ReservedId $$ "class" }
@@ -18,8 +21,11 @@ import Syntax.Tokens
   "deriving"    { ReservedId $$ "deriving" }
   "do"          { ReservedId $$ "do" }
   "else"        { ReservedId $$ "else" }
+  "extends"     { ReservedId $$ "else" }
   "fails"       { ReservedId $$ "fails" }
+  "hiding"      { ReservedId $$ "hiding" }
   "if"          { ReservedId $$ "if" }
+  "import"      { ReservedId $$ "import" }
   "in"          { ReservedId $$ "in" }
   "infix"       { ReservedId $$ "infix" }
   "infixl"      { ReservedId $$ "infixl" }
@@ -27,7 +33,9 @@ import Syntax.Tokens
   "instance"    { ReservedId $$ "instance" }
   "lab"         { ReservedId $$ "lab" }
   "let"         { ReservedId $$ "let" }
+  "module"      { ReservedId $$ "module" }
   "of"          { ReservedId $$ "of" }
+  "qualified"   { ReservedId $$ "qualified" }
   "struct"      { ReservedId $$ "struct" }
   "then"        { ReservedId $$ "then" }
   "type"        { ReservedId $$ "type" }
@@ -53,7 +61,7 @@ import Syntax.Tokens
   "@"           { ReservedSym $$ "@" _ }
   "_"           { ReservedSym $$ "_" _ }
   "."           { ReservedSym $$ "." _ }
-  "*"           { ReservedSym $$ "." _ }
+  "*"           { ReservedSym $$ "*" _ }
   "/"           { ReservedSym $$ "/" _ }
 
   varid         { VarId _ _ }
@@ -67,12 +75,173 @@ import Syntax.Tokens
 %%
 
 -- These are defined in the Nov10 Habit report, page 28
+Habit :: { HabitModule }
+  : "{" Prog "}"
+  { HabitModule defaultMod $2 }
+  | "module" ModName "where" "{" Prog "}"
+  { HabitModule $2 $5 }
+
+Prog :: { [Decl] }
+  :
+  { [] }
+  | Decl
+  { [$1] }
+  | Prog ";" Decl
+  { $1 ++ [$3] }
+
+-- Declarations
+
+Decl :: { Decl }
+  : ImportDecl
+  { $1 }
+  | FixityDecl
+  { $1 }
+
+-- Import Statements
+ImportDecl :: { Decl }
+  : "import" ModName
+  { ImportDecl $1 False $2 Nothing NoMods }
+  | "import" ModName ImportNameList
+  { ImportDecl $1 False $2 Nothing (IncludeOnly $3) }
+  | "import" "qualified" ModName
+  { ImportDecl $1 True $3 Nothing NoMods }
+  | "import" "qualified" ModName ImportNameList
+  { ImportDecl $1 True $3 Nothing (IncludeOnly $4) }
+  | "import" "qualified" ModName "as" ModName
+  { ImportDecl $1 True $3 (Just $5) NoMods }
+  | "import" "qualified" ModName ImportNameList "as" ModName
+  { ImportDecl $1 True $3 (Just $6) (IncludeOnly $4) }
+  | "import" ModName "hiding" ImportNameList
+  { ImportDecl $1 False $2 Nothing (HidingNames $4) }
+  | "import" "qualified" ModName "hiding" ImportNameList
+  { ImportDecl $1 True $3 Nothing (HidingNames $5) }
+  | "import" ModName "hiding" ImportNameList "as" ModName
+  { ImportDecl $1 False $2 (Just $6) (HidingNames $4) }
+  | "import" "qualified" ModName "hiding" ImportNameList "as" ModName
+  { ImportDecl $1 True $3 (Just $7) (HidingNames $5) }
+
+ImportNameList :: { [Name] }
+  : "(" ")"
+  { [] }
+  | "(" NameList ")"
+  { $2 }
+
+NameList :: { [Name] }
+  : VarName
+  { [$1] }
+  | NameList "," VarName
+  { $1 ++ [$3] }
+
+-- Fixity Declarations Statements
+
+FixityDecl :: { Decl }
+  : Assoc Prec CommaOpList
+  { $1 False $2 $3 }
+  | Assoc "type" Prec CommaTyopList
+  { $1 True $3 $4 }
+
+Assoc :: { Bool -> Maybe Integer -> [Name] -> Decl }
+  : "infixl"
+  { FixityDecl $1 FixityLeft }
+  | "infixr"
+  { FixityDecl $1 FixityRight }
+  | "infix"
+  { FixityDecl $1 FixityBoth }
+
+Prec :: { Maybe Integer }
+  :
+  { Nothing }
+  | int
+  { let IntConst _ v _ = $1 in Just v }
+
+CommaOpList :: { [Name] }
+  : Oper
+  { [$1] }
+  | CommaOpList "," Oper
+  { $1 ++ [$3] }
+
+CommaTyopList :: { [Name] }
+  : TyOper
+  { [$1] }
+  | CommaTyopList "," TyOper
+  { $1 ++ [$3] }
+
+Oper :: { Name }
+  : VarSymId
+  { $1 }
+  | "`" OptModName VarId "`"
+  { maybeAddName' $2 $3 }
+  | consymid
+  { startName $1 }
+  | "`" ModName "`"
+  { $2 }
+
+TyOper :: { Name }
+  : "`" OptModName VarId "`"
+  { maybeAddName' $2 $3 }
+  | consymid
+  { startName $1 }
+  | "`" ModName "`"
+  { $2 }
+  | VarSymId
+  { $1 }
+  | "->"
+  { Name $1 False [] "->" }
+
+--
+
+VarSymId :: { Name }
+  : varsymid
+  { startName $1 }
+  | "*"
+  { Name $1 False [] "*" }
+  | "/"
+  { Name $1 False [] "/" }
+
+VarId :: { Name }
+  : varid
+  { startName $1 }
+  | "as"
+  { Name $1 False [] "as" }
+  | "hiding"
+  { Name $1 False [] "hiding" }
+  | "import"
+  { Name $1 False [] "import" }
+  | "lab"
+  { Name $1 False [] "lab" }
+  | "module"
+  { Name $1 False [] "module" }
+  | "qualified"
+  { Name $1 False [] "qualified" }
+
+ModName :: { Name }
+  : conid
+  { startName $1 }
+  | ModName "." conid
+  { addName $1 $3 }
+
+OptModName :: { Maybe Name }
+  :
+  { Nothing }
+  | ModName "."
+  { Just $1 }
+
+VarName :: { Name }
+  : OptModName VarId
+  { maybeAddName' $1 $2 }
+  | ModName
+  { $1 }
+  | OptModName "(" VarSymId ")"
+  { maybeAddName' $1 $3 }
+  | OptModName "(" consymid ")"
+  { maybeAddName $1 $3 }
+
+{-
 Prog        : TopDecl                     { 1 }
             | Prog ";" TopDecl            { 1 }
 
-Decl        : Equation                    { 1 }
-            | FixityDecl                  { 1 }
-            | TypeSigDecl                 { 1 }
+Decl        | TypeSigDecl                 { 1 }
+            | Equation                    { 1 }
 
 TopDecl     : Decl                        { 1 }
             | ClassDecl                   { 1 }
@@ -87,7 +256,6 @@ TopDecl     : Decl                        { 1 }
 Equation    : EqLhs EqRhs                 { 1 }
 
 EqLhs       : Var OptPatList              { 1 }
-            | Pat                         { 1 }
 
 OptPatList  :                             { 1 }
             | OptPatList APat             { 1 }
@@ -101,16 +269,6 @@ GuardEqRhs  : "|" Expr "=" Expr             { 1 }
             | GuardEqRhs "|" Expr "=" Expr  { 1 }
 
 -- These are defined in the Nov10 Habit report, page 30
-FixityDecl  : Assoc Prec CommaOpList            { 1 }
-            | Assoc "type" Prec CommaTyopList   { 1 }
-
-Assoc       : "infixl"                          { 1 }
-            | "infixr"                          { 1 }
-            | "infix"                           { 1 }
-
-Prec        :                                   { 1 }
-            | int                               { 1 }
-
 CommaOpList : Op                                { 1 }
             | CommaOpList "," Op                { 1 }
 
@@ -133,7 +291,6 @@ CommaConstList : Constraint                    { 1 }
                | CommaConstList "," Constraint { 1 }
 
 ClassLhs    : TypeLhs OptParam                  { 1 }
-            | "(" ClassLhs ")"                  { 1 }
 
 OptParam    : "=" TypeParam                     { 1 }
 
@@ -142,7 +299,6 @@ TypeLhs     : TypeParam Tyconop TypeParam       { 1 }
 
 PreTypeLhs  : Tycon                             { 1 }
             | PreTypeLhs TypeParam              { 1 }
-            | "(" TypeLhs ")"                   { 1 }
 
 TypeParam   : Var                               { 1 }
             | "(" TypeParam OptKind ")"         { 1 }
@@ -150,8 +306,12 @@ TypeParam   : Var                               { 1 }
 OptKind     :                                   { 1 }
             | Kind                              { 1 }
 
-Constraint  : Pred                              { 1 }
-            | FunDep                            { 1 }
+Constraint  : FunDep                            { 1 }
+            | Con ConstArgs                     { 1 }
+            | "(" Preds ")"                     { 1 }
+
+ConstArgs   : Type                              { 1 }
+            | ConstArgs Type                    { 1 }
 
 FunDep      : OptListVar "->" ListVar           { 1 }
 
@@ -190,7 +350,7 @@ DataCons    : DataCon                     { 1 }
 OptDerive   :                             { 1 }
             | "deriving" DeriveList       { 1 }
 
-DataCon     : Type Conop Type             { 1 }
+DataCon     : DataCon Conop Type          { 1 }
             | PreDataCon                  { 1 }
 
 PreDataCon  : Con                         { 1 }
@@ -223,13 +383,9 @@ BDataFields : BitdataField                { 1 }
                                           { 1 }
 
 BitdataField
-            : varid OptEqExpr "::" AppType
-                                          { 1 }
+            : varid "::" AppType          { 1 }
+            | varid "=" Expr "::" AppType { 1 }
             | Expr                        { 1 }
-
-OptEqExpr   :                             { 1 }
-            | "=" Expr                    { 1 }
-
 
 -- These are defined in the Nov10 Habit report, page 44.
 StructDecl  : "struct" conid OptSlType "[" SRegions "]" OptDerive
@@ -269,8 +425,8 @@ AreaVar     : Var OptInit                 { 1 }
 Block       : "{" Stmts "}"               { 1 }
 
 Stmts       : Stmt                        { 1 }
-            | Stmts ";" "let" DeclBlock   { 1 }
-            | Stmts ";" OptAssign Stmt    { 1 }
+--            | Stmts ";" "let" DeclBlock   { 1 }
+--            | Stmts ";" OptAssign Stmt    { 1 }
 
 OptAssign   :                             { 1 }
             | Var "<-"                    { 1 }
@@ -398,10 +554,8 @@ GuardListBlock : "|" Expr "->" Block                { 1 }
                | GuardListBlock "|" Expr "->" Block { 1 }
 
 -- These are defined in the Nov10 Habit report, page 26
-Pat         : AppPat PatInfixOps          { 1 }
-
-PatInfixOps :                             { 1 }
-            | Op AppPat                   { 1 }
+Pat         : AppPat                      { 1 }
+            | Pat Op AppPat               { 1 }
 
 AppPat      : APat                        { 1 }
             | AppPat APat                 { 1 }
@@ -431,23 +585,16 @@ OptEqPat    :                             { 1 }
 
 
 -- These are defined in the Nov10 Habit report, page 17-18
-SigType     : OptPreds Type               { 1 }
+SigType     : Type                        { 1 }
+            | Pred "=>"                   { 1 }
+            | Pred "=>" Type              { 1 }
+            | "(" Preds ")" "=>"          { 1 }
+            | "(" Preds ")" "=>" Type     { 1 }
 
-OptPreds    :                             { 1 }
-            | Preds "=>"                  { 1 }
+Preds       : Pred                        { 1 }
+            | Preds  "," Pred             { 1 }
 
-Preds       : "(" PredItems ")"           { 1 }
-            | Pred                        { 1 }
-
-PredItems   :                             { 1 }
-            | PredItems2                  { 1 }
-
-PredItems2  : Pred                        { 1 }
-            | PredItems2 "," Pred         { 1 }
-
-Pred        : AppPred OptEqType OptFails  { 1 }
-            | SelPred "=" Type OptFails   { 1 }
-            | "(" Pred ")"                { 1 }
+Pred        : Type OptEqType OptFails     { 1 }
 
 OptEqType   :                             { 1 }
             | "=" Type                    { 1 }
@@ -455,29 +602,16 @@ OptEqType   :                             { 1 }
 OptFails    :                             { 1 }
             | "fails"                     { 1 }
 
-AppPred     : Type Tyconop Type           { 1 }
-            | PrePred                     { 1 }
-
-PrePred     : Tycon                       { 1 }
-            | PrePred AType               { 1 }
-            | "(" AppPred ")"             { 1 }
-
-SelPred     : AType "." Id                { 1 }
-            | "(" SelPred ")"             { 1 }
-
 
 -- These are defined in the Nov10 Habit report, page 15
-Type        : AppType InfixTypeStuff      { 1 }
-
-InfixTypeStuff
-            :                             { 1 }
-            | InfixTypeStuff Tyop AppType { 1 }
+Type        : AppType                     { 1 }
+            | Type Tyop AppType           { 1 }
 
 AppType     : AType                       { 1 }
             | AppType AType               { 1 }
 
-AType       : Tyvar                       { 1 }
-            | Tycon                       { 1 }
+AType       : varid                       { 1 }
+            | conid                       { 1 }
             | "(" ")"                     { 1 }
             | int                         { 1 }
             | "#." Id                     { 1 }
@@ -505,7 +639,6 @@ Tyvarop     : "`" varid "`"           { 1 }
 
 Tycon       : Con                     { 1 }
             | "(" varsymid ")"        { 1 }
-            | "(" "->" ")"            { 1 }
 
 Tyconop     : Conop                   { 1 }
             | varsymid                { 1 }
@@ -534,11 +667,58 @@ Op          : Varop                   { 1 }
 Id          : varid                   { 1 }
             | conid                   { 1 }
 
+-}
 
 {
 
+data HabitModule = HabitModule Name [Decl]
+ deriving (Show)
+
+data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
+                 | FixityDecl AlexPosn FixityType Bool (Maybe Integer) [Name]
+ deriving (Show)
+
+data ImportMods = IncludeOnly [Name]
+                | HidingNames [Name]
+                | NoMods
+ deriving (Show)
+
+data FixityType = FixityLeft | FixityRight | FixityBoth
+  deriving (Show)
+
+data Name       = Name AlexPosn Bool [String] String
+ deriving (Show)
+
+defaultMod :: Name
+defaultMod = Name nopos True [] "Main"
+
+startName :: Lexeme -> Name
+startName (ReservedId p x)    = Name p False [] x
+startName (ReservedSym p x m) = Name p m [] x
+startName (VarId p bs)        = Name p False [] (fromBS bs)
+startName (ConId p bs)        = Name p False [] (fromBS bs)
+startName (VarSymId p bs)     = Name p False [] (fromBS bs)
+startName (ConSymId p bs)     = Name p False [] (fromBS bs)
+startName x                   = error ("Bad token for startName: " ++ show x)
+
+addName :: Name -> Lexeme -> Name
+addName (Name p m ls x) t = Name p m (ls ++ [x]) y
+ where Name _ _ _ y = startName t
+
+maybeAddName :: Maybe Name -> Lexeme -> Name
+maybeAddName Nothing  x = startName x
+maybeAddName (Just m) x = addName m x
+
+maybeAddName' :: Maybe Name -> Name -> Name
+maybeAddName' Nothing  x = x
+maybeAddName' (Just (Name p1 m1 ls1 x1)) (Name _ m2 ls2 x2) =
+  Name p1 (m1 && m2) (ls1 ++ [x1] ++ ls2) x2
+
 happyError :: Alex a
 happyError = fail "Parse Failed"
+
+fromBS :: ByteString -> String
+fromBS = map (chr . fromIntegral) . unpack
 
 }
 
