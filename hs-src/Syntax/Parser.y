@@ -34,6 +34,7 @@ import Syntax.Tokens
   "lab"         { ReservedId $$ "lab" }
   "let"         { ReservedId $$ "let" }
   "module"      { ReservedId $$ "module" }
+  "nat"         { ReservedId $$ "module" }
   "of"          { ReservedId $$ "of" }
   "qualified"   { ReservedId $$ "qualified" }
   "struct"      { ReservedId $$ "struct" }
@@ -85,16 +86,18 @@ Prog :: { [Decl] }
   :
   { [] }
   | Decl
-  { [$1] }
+  { $1 }
   | Prog ";" Decl
-  { $1 ++ [$3] }
+  { $1 ++ $3 }
 
 -- Declarations
 
-Decl :: { Decl }
+Decl :: { [Decl] }
   : ImportDecl
-  { $1 }
+  { [$1] }
   | FixityDecl
+  { [$1] }
+  | TypeSigDecl
   { $1 }
 
 -- Import Statements
@@ -188,6 +191,103 @@ TyOper :: { Name }
   | "->"
   { Name $1 False [] "->" }
 
+-- Type Signatures
+
+TypeSigDecl :: { [Decl] }
+  : TypeSigNames "::" Type
+  { map (\ n -> TypeSigDecl $2 n $3) $1 }
+  | TypeSigNames "::" Predicate "=>" Type
+  { map (\ n -> TypeSigDecl $2 n (WithPredicates $3 $5)) $1 }
+
+TypeSigNames :: { [Name] }
+  : TypeSigName
+  { [$1] }
+  | TypeSigNames "," TypeSigName
+  { $1 ++ [$3] }
+
+TypeSigName :: { Name }
+  : VarId
+  { $1 }
+  | "(" VarSymId ")"
+  { $2 }
+
+Predicate :: { [Predicate] }
+  : Type
+  { buildPredicate $1 Nothing False }
+  | Type "=" Type
+  { buildPredicate $1 (Just $3) False }
+  | Type "fails"
+  { buildPredicate $1 Nothing True }
+  | Type "=" Type "fails"
+  { buildPredicate $1 (Just $3) True }
+
+-- Types
+
+Type :: { Type }
+  : TupleType "::" Kind
+  { TypeKind $1 $3 }
+  | TupleType
+  { $1 }
+
+TupleType :: { Type }
+  : "(" TupleTypeCommas ")"
+  { TypeTuple $2 }
+  | InfixType
+  { $1 }
+
+TupleTypeCommas :: { [Type] }
+  : TupleType "," TupleType
+  { [$1, $3] }
+  | TupleTypeCommas "," TupleType
+  { $1 ++ [$3] }
+
+InfixType :: { Type }
+  : InfixType TyOp AppliedType
+  { TypeApp (TypeRef $2) [$1, $3] }
+  | AppliedType
+  { $1 }
+
+AppliedType :: { Type }
+  : AppliedType AtomicType
+  { TypeApp $1 [$2] }
+  | AtomicType
+  { $1 }
+
+AtomicType :: { Type }
+  : TyVar
+  { TypeRef $1 }
+  | "(" ")"
+  { TypeUnit }
+  | int
+  { let IntConst _ v _ = $1 in TypeInt v }
+  | "#." Id
+  { TypeLabel $2 }
+  | "(" TyOp ")"
+  { TypeRef $2 }
+  | "(" Type ")"
+  { $2 }
+
+Kind :: { Kind }
+  : AtomicKind "->" Kind
+  { KindFun $1 $3 }
+  | AtomicKind
+  { $1 }
+
+AtomicKind :: { Kind }
+  : "*"
+  { KindStar }
+  | "type"
+  { KindType }
+  | "nat"
+  { KindNat }
+  | "area"
+  { KindArea }
+  | "lab"
+  { KindLabel }
+  | "(" Kind ")"
+  { $2 }
+
+
 --
 
 VarSymId :: { Name }
@@ -236,9 +336,30 @@ VarName :: { Name }
   | OptModName "(" consymid ")"
   { maybeAddName $1 $3 }
 
+TyOp :: { Name }
+  : OptModName consymid
+  { maybeAddName $1 $2 }
+  | OptModName "`" conid "`"
+  { maybeAddName $1 $3 }
+
+TyVar :: { Name }
+  : ModName
+  { $1 }
+  | varid
+  { startName $1 }
+  | "_"
+  { Name $1 False [] "_" }
+
+Id :: { Name }
+  : varid
+  { startName $1 }
+  | conid
+  { startName $1 }
+
+
 {-
-Prog        : TopDecl                     { 1 }
-            | Prog ";" TopDecl            { 1 }
+
+OLDRULES
 
 Decl        | TypeSigDecl                 { 1 }
             | Equation                    { 1 }
@@ -676,6 +797,7 @@ data HabitModule = HabitModule Name [Decl]
 
 data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | FixityDecl AlexPosn FixityType Bool (Maybe Integer) [Name]
+                 | TypeSigDecl AlexPosn Name Type
  deriving (Show)
 
 data ImportMods = IncludeOnly [Name]
@@ -685,6 +807,32 @@ data ImportMods = IncludeOnly [Name]
 
 data FixityType = FixityLeft | FixityRight | FixityBoth
   deriving (Show)
+
+data Type = WithPredicates [Predicate] Type
+          | TypeRef Name
+          | TypeUnit
+          | TypeInt Integer
+          | TypeLabel Name
+          | TypeKind Type Kind
+          | TypeApp Type [Type]
+          | TypeTuple [Type]
+  deriving (Show)
+
+data Kind = KindStar | KindType | KindNat | KindArea | KindLabel
+          | KindFun Kind Kind
+  deriving (Show)
+
+data Predicate = Predicate Type (Maybe Type) Bool
+  deriving (Show)
+
+buildPredicate :: Type -> (Maybe Type) -> Bool -> [Predicate]
+buildPredicate (TypeTuple ps) Nothing False =
+  concatMap (\ x -> buildPredicate x Nothing False) ps
+buildPredicate (TypeTuple _) _ _ =
+  error "Unexpected tuple in predicate position."
+buildPredicate x@(TypeApp _ _) y z = [Predicate x y z]
+buildPredicate _ _ _ =
+  error "Unexpected type in predicate position."
 
 data Name       = Name AlexPosn Bool [String] String
  deriving (Show)

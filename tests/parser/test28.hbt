@@ -1,0 +1,1 @@
+a :: (BitSize t = n) => t

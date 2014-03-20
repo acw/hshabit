@@ -1,0 +1,1 @@
+(:#) :: Bit m -> Bit n -> Bit (m + n)

@@ -46,8 +46,8 @@ habit :-
     "data"     | "deriving" | "do"       | "else"     | "extends"  |
     "fails"    | "hiding"   | "if"       | "import"   | "in"       |
     "infix"    | "infixl"   | "infixr"   | "instance" | "lab"      |
-    "let"      | "module"   | "of"       | "qualified"| "struct"   |
-    "then"     | "type"     | "where"                          { mkReservedId }
+    "let"      | "module"   | "nat"      | "of"       | "qualified"|
+    "struct"   | "then"     | "type"     | "where"             { mkReservedId }
 
 <0> "("        | ")"        | "|"        | "="        | ","        |
     "`"        | "{"        | ";"        | "}"        | "["        |
