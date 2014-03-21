@@ -1,0 +1,2 @@
+struct S [ x, y :: Stored Unsigned | Stored Unsigned
+                                   | z :: Stored Unsigned ]

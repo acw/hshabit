@@ -1,0 +1,2 @@
+struct S/16 [ x, y :: Stored Unsigned | Stored Unsigned
+                                      | z :: Stored Unsigned ]

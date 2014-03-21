@@ -102,6 +102,8 @@ Decl :: { [Decl] }
   { $1 }
   | TypeDecl
   { [$1] }
+  | StructDecl
+  { [$1] }
 
 -- Import Statements
 ImportDecl :: { Decl }
@@ -175,16 +177,20 @@ CommaTyopList :: { [Name] }
 Oper :: { Name }
   : VarSymId
   { $1 }
-  | "`" OptModName VarId "`"
-  { maybeAddName' $2 $3 }
+  | "`" VarId "`"
+  { $2 }
+  | "`" ModName "." VarId "`"
+  { addName' $2 $4 }
   | consymid
   { startName $1 }
   | "`" ModName "`"
   { $2 }
 
 TyOper :: { Name }
-  : "`" OptModName VarId "`"
-  { maybeAddName' $2 $3 }
+  : "`" VarId "`"
+  { $2 }
+  | "`" ModName VarId "`"
+  { addName' $2 $3 }
   | consymid
   { startName $1 }
   | "`" ModName "`"
@@ -256,6 +262,76 @@ TypeParam :: { Type }
   | "(" TypeParam "::" Kind ")"
   { TypeKind $2 $4 }
 
+-- Struct Decl
+
+StructDecl :: { Decl }
+  : "struct" conid "[" "]"
+  { StructDecl $1 (startName $2) Nothing [] [] }
+  | "struct" conid "[" "]" "deriving" DeriveList
+  { StructDecl $1 (startName $2) Nothing [] $6 }
+  | "struct" conid "[" StructRegions "]"
+  { StructDecl $1 (startName $2) Nothing $4 [] }
+  | "struct" conid "[" StructRegions "]" "deriving" DeriveList
+  { StructDecl $1 (startName $2) Nothing $4 $7 }
+  | "struct" conid "/" Type "[" "]"
+  { StructDecl $1 (startName $2) (Just $4) [] [] }
+  | "struct" conid "/" Type "[" "]" "deriving" DeriveList
+  { StructDecl $1 (startName $2) (Just $4) [] $8 }
+  | "struct" conid "/" Type "[" StructRegions "]"
+  { StructDecl $1 (startName $2) (Just $4) $6 [] }
+  | "struct" conid "/" Type "[" StructRegions "]" "deriving" DeriveList
+  { StructDecl $1 (startName $2) (Just $4) $6 $9 }
+
+StructRegions :: { [StructField] }
+  : StructRegion
+  { $1 }
+  | StructRegions "|" StructRegion
+  { $1 ++ $3 }
+
+StructRegion :: { [StructField] }
+  : UnkindedType
+  { [(Nothing, Nothing, $1)] }
+  | FieldNames "::" Type
+  { map (\ (a,b) -> (Just a, b, $3)) $1 }
+
+FieldNames :: { [(Name, Maybe Expr)] }
+  : FieldName
+  { [$1] }
+  | FieldNames "," FieldName
+  { $1 ++ [$3] }
+
+FieldName :: { (Name, Maybe Expr) }
+  : varid
+  { (startName $1, Nothing) }
+  | varid "<-" Expr
+  { (startName $1, Just $3) }
+
+DeriveList :: { [Name] }
+  : ModName
+  { [$1] }
+  | "(" ModNameList ")"
+  { $2 }
+
+ModNameList :: { [Name] }
+  : ModName
+  { [$1] }
+  | ModNameList "," ModName
+  { $1 ++ [$3] }
+
+-- Expressions
+Expr :: { Expr }
+  : AtomicExpr
+  { $1 }
+
+AtomicExpr :: { Expr }
+  : int
+  { translateConst $1 }
+  | float
+  { translateConst $1 }
+  | vec
+  { translateConst $1 }
+  | VarName
+  { ExprRef $1 }
 
 -- Types
 
@@ -263,6 +339,10 @@ Type :: { Type }
   : TupleType "::" Kind
   { TypeKind $1 $3 }
   | TupleType
+  { $1 }
+
+UnkindedType :: { Type }
+  : TupleType
   { $1 }
 
 TupleType :: { Type }
@@ -290,8 +370,10 @@ AppliedType :: { Type }
   { $1 }
 
 AtomicType :: { Type }
-  : TyVar
+  : ConName
   { TypeRef $1 }
+  | varid
+  { TypeRef (startName $1) }
   | "(" ")"
   { TypeUnit }
   | int
@@ -302,6 +384,8 @@ AtomicType :: { Type }
   { TypeRef $2 }
   | "(" Type ")"
   { $2 }
+
+-- Kinds
 
 Kind :: { Kind }
   : AtomicKind "->" Kind
@@ -358,36 +442,46 @@ ModName :: { Name }
   | ModName "." conid
   { addName $1 $3 }
 
-OptModName :: { Maybe Name }
-  :
-  { Nothing }
-  | ModName "."
-  { Just $1 }
-
 VarName :: { Name }
-  : OptModName VarId
-  { maybeAddName' $1 $2 }
+  : VarId
+  { $1 }
+  | "(" VarSymId ")"
+  { $2 }
+  | "(" consymid ")"
+  { startName $2 }
+  | ModName "." VarId
+  { addName' $1 $3 }
   | ModName
   { $1 }
-  | OptModName "(" VarSymId ")"
-  { maybeAddName' $1 $3 }
-  | OptModName "(" consymid ")"
-  { maybeAddName $1 $3 }
+  | ModName "." "(" VarSymId ")"
+  { addName' $1 $4 }
+  | ModName "." "(" consymid ")"
+  { addName $1 $4 }
+
+ConName :: { Name }
+  : ModName
+  { $1 }
+  | ModName "." "(" consymid ")"
+  { addName $1 $4 }
 
 TyOp :: { Name }
-  : OptModName consymid
-  { maybeAddName $1 $2 }
-  | OptModName varsymid
-  { maybeAddName $1 $2 }
-  | OptModName "`" conid "`"
-  { maybeAddName $1 $3 }
+  : consymid
+  { startName $1 }
+  | varsymid
+  { startName $1 }
+  | "`" conid "`"
+  { startName $2 }
+  | ModName "." consymid
+  { addName $1 $3 }
+  | ModName "." varsymid
+  { addName $1 $3 }
+  | ModName "." "`" conid "`"
+  { addName $1 $4 }
   | "->"
   { Name $1 False [] "->" }
 
 TyVar :: { Name }
-  : ModName
-  { $1 }
-  | varid
+  : varid
   { startName $1 }
   | "_"
   { Name $1 False [] "_" }
@@ -747,6 +841,7 @@ data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | FixityDecl AlexPosn FixityType Bool (Maybe Integer) [Name]
                  | TypeSigDecl AlexPosn Name Type
                  | TypeDecl AlexPosn Type Type
+                 | StructDecl AlexPosn Name (Maybe Type) [StructField] [Name]
  deriving (Show)
 
 data ImportMods = IncludeOnly [Name]
@@ -755,6 +850,12 @@ data ImportMods = IncludeOnly [Name]
  deriving (Show)
 
 data FixityType = FixityLeft | FixityRight | FixityBoth
+  deriving (Show)
+
+type StructField = (Maybe Name, Maybe Expr, Type)
+
+data Expr = ExprConst ConstVal
+          | ExprRef Name
   deriving (Show)
 
 data Type = WithPredicates [Predicate] Type
@@ -770,6 +871,19 @@ data Type = WithPredicates [Predicate] Type
 data Kind = KindStar | KindType | KindNat | KindArea | KindLabel
           | KindFun Kind Kind
   deriving (Show)
+
+data ConstVal = ConstInt AlexPosn Integer Int
+              | ConstVec AlexPosn Integer Int Int
+              | ConstFloat AlexPosn Float
+              | ConstDouble AlexPosn Double
+  deriving (Show)
+
+translateConst :: Lexeme -> Expr
+translateConst (IntConst a b c) = ExprConst (ConstInt a b c)
+translateConst (VecConst a b c d) = ExprConst (ConstVec a b c d)
+translateConst (FloatConst a (FVal f)) = ExprConst (ConstFloat a f)
+translateConst (FloatConst a (DVal d)) = ExprConst (ConstDouble a d)
+translateConst _ = error "Incorrect lexeme to translateConst"
 
 data Predicate = Predicate Type (Maybe Type) Bool
   deriving (Show)
@@ -802,13 +916,8 @@ addName :: Name -> Lexeme -> Name
 addName (Name p m ls x) t = Name p m (ls ++ [x]) y
  where Name _ _ _ y = startName t
 
-maybeAddName :: Maybe Name -> Lexeme -> Name
-maybeAddName Nothing  x = startName x
-maybeAddName (Just m) x = addName m x
-
-maybeAddName' :: Maybe Name -> Name -> Name
-maybeAddName' Nothing  x = x
-maybeAddName' (Just (Name p1 m1 ls1 x1)) (Name _ m2 ls2 x2) =
+addName' :: Name -> Name -> Name
+addName' (Name p1 m1 ls1 x1) (Name _ m2 ls2 x2) =
   Name p1 (m1 && m2) (ls1 ++ [x1] ++ ls2) x2
 
 happyError :: Alex a
