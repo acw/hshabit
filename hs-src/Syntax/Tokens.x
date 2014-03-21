@@ -53,7 +53,7 @@ habit :-
     "`"        | "{"        | ";"        | "}"        | "["        |
     "]"        | "\\"       | "<-"       | "->"       | "=>"       |
     "::"       | "#."       | "@"        | "_"        | "."        |
-    "*"        | "/"                                           { mkReservedSym }
+    "*"        | "/"        | ":#"                             { mkReservedSym }
 
 <0> "0"[bB][$bindigit \_]*[KMGT]?                              { mkBinConst }
 <0> "0"[oO][$octdigit \_]*[KMGT]?                              { mkOctConst }
@@ -70,8 +70,8 @@ habit :-
 
 <0> $small $idchar*                                            { mkVarId }
 <0> $large $idchar*                                            { mkConId }
-<0> ":" $sym+                                                  { mkVarSymId }
-<0> $nocsym $sym*                                              { mkConSymId }
+<0> $nocsym $sym*                                              { mkVarSymId }
+<0> ":" $sym*                                                  { mkConSymId }
 
 {
 
@@ -500,7 +500,7 @@ nextToken = do
 
 tokenize :: (Lexeme -> Alex a) -> Alex a
 tokenize f = nextToken >>= f
--- tokenize f = nextToken >>= (\ x -> trace (show x) (f x))
+tokenize f = nextToken >>= (\ x -> trace (show x) (f x))
 
 runParser :: FilePath -> ByteString -> Alex a -> Either String a
 runParser _ bstr = runAlex bstr

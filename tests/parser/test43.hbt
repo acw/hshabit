@@ -1,0 +1,1 @@
+type Stream = Pair Unsigned Stream

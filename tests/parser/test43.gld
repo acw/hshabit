@@ -1,0 +1,1 @@
+HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [TypeDecl (AlexPn 0 1 1) (TypeRef (Name (AlexPn 5 1 6) False [] "Stream")) (TypeApp (TypeApp (TypeRef (Name (AlexPn 14 1 15) False [] "Pair")) [TypeRef (Name (AlexPn 19 1 20) False [] "Unsigned")]) [TypeRef (Name (AlexPn 28 1 29) False [] "Stream")])]

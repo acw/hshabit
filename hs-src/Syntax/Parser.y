@@ -64,6 +64,7 @@ import Syntax.Tokens
   "."           { ReservedSym $$ "." _ }
   "*"           { ReservedSym $$ "*" _ }
   "/"           { ReservedSym $$ "/" _ }
+  ":#"          { ReservedSym $$ ":#" _ }
 
   varid         { VarId _ _ }
   conid         { ConId _ _ }
@@ -99,6 +100,8 @@ Decl :: { [Decl] }
   { [$1] }
   | TypeSigDecl
   { $1 }
+  | TypeDecl
+  { [$1] }
 
 -- Import Statements
 ImportDecl :: { Decl }
@@ -223,6 +226,37 @@ Predicate :: { [Predicate] }
   | Type "=" Type "fails"
   { buildPredicate $1 (Just $3) True }
 
+-- Type Declarations
+
+TypeDecl :: { Decl }
+  : "type" TypeLhs "=" Type
+  { TypeDecl $1 $2 $4 }
+
+TypeLhs :: { Type }
+  : TypeParam consymid TypeParam
+  { TypeApp (TypeRef (startName $2)) [$1, $3] }
+  | TypeParam "`" conid "`" TypeParam
+  { TypeApp (TypeRef (startName $3)) [$1, $5] }
+  | PreTypeLhs
+  { $1 }
+
+PreTypeLhs :: { Type }
+  : conid
+  { TypeRef (startName $1) }
+  | PreTypeLhs TypeParam
+  { TypeApp $1 [$2] }
+  | "(" TypeLhs ")"
+  { $2 }
+
+TypeParam :: { Type }
+  : varid
+  { TypeRef (startName $1) }
+  | "(" TypeParam ")"
+  { $2 }
+  | "(" TypeParam "::" Kind ")"
+  { TypeKind $2 $4 }
+
+
 -- Types
 
 Type :: { Type }
@@ -299,6 +333,8 @@ VarSymId :: { Name }
   { Name $1 False [] "*" }
   | "/"
   { Name $1 False [] "/" }
+  | ":#"
+  { Name $1 False [] ":#" }
 
 VarId :: { Name }
   : varid
@@ -341,6 +377,8 @@ VarName :: { Name }
 TyOp :: { Name }
   : OptModName consymid
   { maybeAddName $1 $2 }
+  | OptModName varsymid
+  { maybeAddName $1 $2 }
   | OptModName "`" conid "`"
   { maybeAddName $1 $3 }
   | "->"
@@ -365,13 +403,11 @@ Id :: { Name }
 
 OLDRULES
 
-Decl        | TypeSigDecl                 { 1 }
-            | Equation                    { 1 }
+Decl        | Equation                    { 1 }
 
 TopDecl     : Decl                        { 1 }
             | ClassDecl                   { 1 }
             | InstanceDecl                { 1 }
-            | TypeDecl                    { 1 }
             | DataDecl                    { 1 }
             | BitdataDecl                 { 1 }
             | StructDecl                  { 1 }
@@ -399,12 +435,6 @@ CommaOpList : Op                                { 1 }
 
 CommaTyopList : Tyop                            { 1 }
               | CommaTyopList "," Tyop          { 1 }
-
--- These are defined in the Nov10 Habit report, page 30
-TypeSigDecl : CommaVarList "::" SigType         { 1 }
-
-CommaVarList : Var                              { 1 }
-             | CommaVarList "," Var             { 1 }
 
 -- These are defined in the Nov10 Habit report, page 31
 ClassDecl   : "class" ClassLhs OptConstraints OptWhere  { 1 }
@@ -456,10 +486,6 @@ Instances   : Instance                          { 1 }
 Instance    : Pred OptIfPreds OptWhere          { 1 }
 
 OptIfPreds  : "if" Preds                        { 1 }
-
-
--- This is defined in the Nov10 Habit report, page 33
-TypeDecl    : "type" TypeLhs "=" Type     { 1 }
 
 
 -- These are defined in the Nov10 Habit report, page 38
@@ -709,88 +735,6 @@ OptEqPat    :                             { 1 }
             | "=" Pat                     { 1 }
 
 
--- These are defined in the Nov10 Habit report, page 17-18
-SigType     : Type                        { 1 }
-            | Pred "=>"                   { 1 }
-            | Pred "=>" Type              { 1 }
-            | "(" Preds ")" "=>"          { 1 }
-            | "(" Preds ")" "=>" Type     { 1 }
-
-Preds       : Pred                        { 1 }
-            | Preds  "," Pred             { 1 }
-
-Pred        : Type OptEqType OptFails     { 1 }
-
-OptEqType   :                             { 1 }
-            | "=" Type                    { 1 }
-
-OptFails    :                             { 1 }
-            | "fails"                     { 1 }
-
-
--- These are defined in the Nov10 Habit report, page 15
-Type        : AppType                     { 1 }
-            | Type Tyop AppType           { 1 }
-
-AppType     : AType                       { 1 }
-            | AppType AType               { 1 }
-
-AType       : varid                       { 1 }
-            | conid                       { 1 }
-            | "(" ")"                     { 1 }
-            | int                         { 1 }
-            | "#." Id                     { 1 }
-            | AType "." Id                { 1 }
-            | "(" Tyop ")"                { 1 }
-            | "(" Type OptionalKind ")"   { 1 }
-
-OptionalKind : "::" Kind                  { 1 }
-
--- These are defined in the Nov10 Habit report, page 14-15
-Kind        : AKind "->" Kind         { 1 }
-            | AKind                   { 1 }
-
-AKind       : "*"                     { 1 }
-            | "type"                  { 1 }
-            | int                     { 1 }
-            | "area"                  { 1 }
-            | "lab"                   { 1 }
-            | "(" Kind ")"            { 1 }
-
--- These are defined in the Nov10 Habit report, page 11
-Tyvar       : varid                   { 1 }
-
-Tyvarop     : "`" varid "`"           { 1 }
-
-Tycon       : Con                     { 1 }
-            | "(" varsymid ")"        { 1 }
-
-Tyconop     : Conop                   { 1 }
-            | varsymid                { 1 }
-            | "->"                    { 1 }
-
-Tyop        : Tyvarop                 { 1 }
-            | Tyconop                 { 1 }
-
-
--- These are defined in the Nov10 Habit report, page 10
-Var         : varid                   { 1 }
-            | "(" varsymid ")"        { 1 }
-
-Varop       : varsymid                { 1 }
-            | "`" varid "`"           { 1 }
-
-Con         : conid                   { 1 }
-            | "(" consymid ")"        { 1 }
-
-Conop       : consymid                { 1 }
-            | "`" conid "`"           { 1 }
-
-Op          : Varop                   { 1 }
-            | Conop                   { 1 }
-
-Id          : varid                   { 1 }
-            | conid                   { 1 }
 
 -}
 
@@ -802,6 +746,7 @@ data HabitModule = HabitModule Name [Decl]
 data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | FixityDecl AlexPosn FixityType Bool (Maybe Integer) [Name]
                  | TypeSigDecl AlexPosn Name Type
+                 | TypeDecl AlexPosn Type Type
  deriving (Show)
 
 data ImportMods = IncludeOnly [Name]
