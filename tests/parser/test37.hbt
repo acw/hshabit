@@ -1,0 +1,1 @@
+nonZero :: t -> Maybe (NonZero t)

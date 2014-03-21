@@ -1,0 +1,1 @@
+HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [TypeSigDecl (AlexPn 4 1 5) (Name (AlexPn 0 1 1) False [] "a") (TypeRef (Name (AlexPn 7 1 8) False [] "Int")),TypeSigDecl (AlexPn 4 1 5) (Name (AlexPn 2 1 3) False [] "b") (TypeRef (Name (AlexPn 7 1 8) False [] "Int"))]
