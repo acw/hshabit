@@ -34,7 +34,7 @@ import Syntax.Tokens
   "lab"         { ReservedId $$ "lab" }
   "let"         { ReservedId $$ "let" }
   "module"      { ReservedId $$ "module" }
-  "nat"         { ReservedId $$ "module" }
+  "nat"         { ReservedId $$ "nat" }
   "of"          { ReservedId $$ "of" }
   "qualified"   { ReservedId $$ "qualified" }
   "struct"      { ReservedId $$ "struct" }
@@ -196,6 +196,8 @@ TyOper :: { Name }
 TypeSigDecl :: { [Decl] }
   : TypeSigNames "::" Type
   { map (\ n -> TypeSigDecl $2 n $3) $1 }
+  | TypeSigNames "::" "(" Predicate ")" "=>" Type
+  { map (\ n -> TypeSigDecl $2 n (WithPredicates $4 $7)) $1 }
   | TypeSigNames "::" Predicate "=>" Type
   { map (\ n -> TypeSigDecl $2 n (WithPredicates $3 $5)) $1 }
 
@@ -341,6 +343,8 @@ TyOp :: { Name }
   { maybeAddName $1 $2 }
   | OptModName "`" conid "`"
   { maybeAddName $1 $3 }
+  | "->"
+  { Name $1 False [] "->" }
 
 TyVar :: { Name }
   : ModName
