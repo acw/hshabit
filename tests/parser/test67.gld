@@ -1,0 +1,1 @@
+HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [AreaDecl (AlexPn 0 1 1) (Name (AlexPn 5 1 6) False [] "a") (Just (ExprRef (Name (AlexPn 10 1 11) False [] "x"))) (TypeApp (TypeRef (Name (AlexPn 15 1 16) False [] "Ref")) [TypeRef (Name (AlexPn 19 1 20) False [] "A")])]

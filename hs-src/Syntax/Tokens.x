@@ -499,8 +499,8 @@ nextToken = do
 -- ----------------------------------------------------------------------------
 
 tokenize :: (Lexeme -> Alex a) -> Alex a
--- tokenize f = nextToken >>= f
-tokenize f = nextToken >>= (\ x -> trace (show x) (f x))
+tokenize f = nextToken >>= f
+-- tokenize f = nextToken >>= (\ x -> trace (show x) (f x))
 
 runParser :: FilePath -> ByteString -> Alex a -> Either String a
 runParser _ bstr = runAlex bstr

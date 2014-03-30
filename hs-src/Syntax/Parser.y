@@ -104,6 +104,30 @@ Decl :: { [Decl] }
   { [$1] }
   | StructDecl
   { [$1] }
+  | BitdataDecl
+  { [$1] }
+  | AreaDecl
+  { $1 }
+--  | ClassDecl
+--  { $1 }
+--  | InstanceDecl
+--  { $1 }
+--  | DataDecl
+--  { $1 }
+--  | Equation
+--  { $1 }
+
+DeclBlock :: { [Decl] }
+  : "{" "}"
+  { [] }
+  | "{" Decls "}"
+  { $2 }
+
+Decls :: { [Decl] }
+  : Decl
+  { $1 }
+  | Decls ";" Decl
+  { $1 ++ $3 }
 
 -- Import Statements
 ImportDecl :: { Decl }
@@ -318,6 +342,73 @@ ModNameList :: { [Name] }
   | ModNameList "," ModName
   { $1 ++ [$3] }
 
+-- Bitdata Declarations
+BitdataDecl :: { Decl }
+  : "bitdata" conid
+  { BitdataDecl $1 (startName $2) Nothing [] [] }
+  | "bitdata" conid "deriving" DeriveList
+  { BitdataDecl $1 (startName $2) Nothing [] $4 }
+  | "bitdata" conid BitdataCons
+  { BitdataDecl $1 (startName $2) Nothing $3 [] }
+  | "bitdata" conid BitdataCons "deriving" DeriveList
+  { BitdataDecl $1 (startName $2) Nothing $3 $5 }
+  | "bitdata" conid "/" Type
+  { BitdataDecl $1 (startName $2) (Just $4) [] [] }
+  | "bitdata" conid "/" Type "deriving" DeriveList
+  { BitdataDecl $1 (startName $2) (Just $4) [] $6 }
+  | "bitdata" conid "/" Type BitdataCons
+  { BitdataDecl $1 (startName $2) (Just $4) $5 [] }
+  | "bitdata" conid "/" Type BitdataCons "deriving" DeriveList
+  { BitdataDecl $1 (startName $2) (Just $4) $5 $7 }
+
+BitdataCons :: { [(Name, [Either Expr (Name, Maybe Expr, Type)])] }
+  : "=" BitdataCon
+  { [$2] }
+  | BitdataCons "|" BitdataCon
+  { $1 ++ [$3] }
+
+BitdataCon :: { (Name, [Either Expr (Name, Maybe Expr, Type)]) }
+  : conid "[" BitdataFields "]"
+  { (startName $1, $3) }
+
+BitdataFields :: { [Either Expr (Name, Maybe Expr, Type)] }
+  : BitdataField
+  { [$1] }
+  | BitdataFields "|" BitdataField
+  { $1 ++ [$3] }
+
+BitdataField :: { Either Expr (Name, Maybe Expr, Type) }
+  : varid "::" Type
+  { Right (startName $1, Nothing, $3) }
+  | varid "=" Expr "::" Type
+  { Right (startName $1, Just $3, $5) }
+  | Expr
+  { Left $1 }
+
+-- Area Declarations
+
+AreaDecl :: { [Decl] }
+  : "area" AreaVars "::" Type
+  { map (\ (n,v) -> AreaDecl $1 n v $4) $2 }
+  | "area" AreaVars "::" Type "where" DeclBlock
+  { [LocalDecl $6 (map (\ (n,v) -> AreaDecl $1 n v $4) $2)] }
+
+AreaVars :: { [(Name, Maybe Expr)] }
+  : AreaVar
+  { [$1] }
+  | AreaVars "," AreaVar
+  { $1 ++ [$3] }
+
+AreaVar :: { (Name, Maybe Expr) }
+  : varid
+  { (startName $1, Nothing) }
+  | varid "<-" Expr
+  { (startName $1, Just $3) }
+  | "(" varsymid ")"
+  { (startName $2, Nothing) }
+  | "(" varsymid ")" "<-" Expr
+  { (startName $2, Just $5) }
+
 -- Expressions
 Expr :: { Expr }
   : AtomicExpr
@@ -480,12 +571,6 @@ TyOp :: { Name }
   | "->"
   { Name $1 False [] "->" }
 
-TyVar :: { Name }
-  : varid
-  { startName $1 }
-  | "_"
-  { Name $1 False [] "_" }
-
 Id :: { Name }
   : varid
   { startName $1 }
@@ -503,9 +588,6 @@ TopDecl     : Decl                        { 1 }
             | ClassDecl                   { 1 }
             | InstanceDecl                { 1 }
             | DataDecl                    { 1 }
-            | BitdataDecl                 { 1 }
-            | StructDecl                  { 1 }
-            | AreaDecl                    { 1 }
 
 -- These are defined in the Nov10 Habit report, page 29
 Equation    : EqLhs EqRhs                 { 1 }
@@ -607,61 +689,6 @@ DeriveList  : Con                         { 1 }
 
 Cons        : Con                         { 1 }
             | Cons "," Con                { 1 }
-
--- These are defined in the Nov10 Habit report, page 39
-BitdataDecl : "bitdata" conid OptSlType OptBCons OptDerive
-                                          { 1 }
-
-OptSlType   :                             { 1 }
-            | "/" Type                    { 1 }
-
-OptBCons    :                             { 1 }
-            | "=" BCons                   { 1 }
-
-BCons       : BitdataCon                  { 1 }
-            | BCons "|" BitdataCon        { 1 }
-
-BitdataCon  : Con "[" BDataFields "]"     { 1 }
-
-BDataFields : BitdataField                { 1 }
-            | BDataFields "|" BitdataField
-                                          { 1 }
-
-BitdataField
-            : varid "::" AppType          { 1 }
-            | varid "=" Expr "::" AppType { 1 }
-            | Expr                        { 1 }
-
--- These are defined in the Nov10 Habit report, page 44.
-StructDecl  : "struct" conid OptSlType "[" SRegions "]" OptDerive
-                                          { 1 }
-
-SRegions    : StructRegion                { 1 }
-            | SRegions "|" StructRegion   { 1 }
-
-StructRegion
-            : OptFieldNames Type          { 1 }
-
-OptFieldNames
-            :                             { 1 }
-            | StrFields "::"              { 1 }
-
-StrFields   : StructField                 { 1 }
-            | StrFields "," StructField   { 1 }
-
-StructField : Id OptInit                  { 1 }
-
-OptInit     :                             { 1 }
-            | "<-" Expr                   { 1 }
-
--- These are defined in the Nov10 Habit report, page 44.
-AreaDecl    : "area" AreaVars "::" Type OptWhere
-                                          { 1 }
-
-AreaVars    : AreaVar                     { 1 }
-            | AreaVars "," AreaVar        { 1 }
-
-AreaVar     : Var OptInit                 { 1 }
 
 -- These are defined in the Nov10 Habit report, page 23. I've
 -- switched the Stmts to be left-recursive instead of right, which
@@ -842,6 +869,9 @@ data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | TypeSigDecl AlexPosn Name Type
                  | TypeDecl AlexPosn Type Type
                  | StructDecl AlexPosn Name (Maybe Type) [StructField] [Name]
+                 | BitdataDecl AlexPosn Name (Maybe Type) [BitdataField] [Name]
+                 | AreaDecl AlexPosn Name (Maybe Expr) Type
+                 | LocalDecl [Decl] [Decl]
  deriving (Show)
 
 data ImportMods = IncludeOnly [Name]
@@ -853,6 +883,7 @@ data FixityType = FixityLeft | FixityRight | FixityBoth
   deriving (Show)
 
 type StructField = (Maybe Name, Maybe Expr, Type)
+type BitdataField = (Name, [Either Expr (Name, Maybe Expr, Type)])
 
 data Expr = ExprConst ConstVal
           | ExprRef Name
