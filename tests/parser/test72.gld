@@ -1,0 +1,1 @@
+HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [ClassDecl (AlexPn 0 1 1) (TypeApp (TypeRef (Name (AlexPn 8 1 9) False [] ":~:")) [TypeRef (Name (AlexPn 6 1 7) False [] "a"),TypeRef (Name (AlexPn 12 1 13) False [] "b")]) Nothing [] []]

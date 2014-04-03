@@ -1,0 +1,3 @@
+instance Foo a if Bar a
+else Foo a if Goo a
+else Foo a fails

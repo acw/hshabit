@@ -1,5 +1,6 @@
 {
 {-# OPTIONS_GHC -w #-}
+--  vim:set filetype=haskell:
 module Syntax.Tokens( Lexeme(..)
                     , FloatVal(..)
                     , AlexPosn(..), nopos
@@ -162,6 +163,10 @@ isNewLine st tok = lineNum tok > curLine st
 tokenWantsOpenBrace :: Lexeme -> Bool
 tokenWantsOpenBrace (ReservedId _ x) = x `elem` ["let", "where", "do", "of"]
 tokenWantsOpenBrace _                = False
+
+forbidsInjectedSemi :: Lexeme -> Bool
+forbidsInjectedSemi (ReservedId _ x) = x `elem` ["then","else","of","in"]
+forbidsInjectedSemi _                = False
 
 injectedCloseBrace :: Lexeme
 injectedCloseBrace = ReservedSym nopos "}" True
@@ -467,7 +472,11 @@ nextToken :: Alex Lexeme
 nextToken = do
   (head, stack) <- nextFunctionLState
   case (head, stack) of
-    (IndentMarkA n, (m : ms)) | m == n ->    return injectedSemi
+    (IndentMarkA n, (m : ms)) | m == n -> do (t, _) <- nextFunctionLState
+                                             if forbidsInjectedSemi t
+                                               then return t
+                                               else do saveToken t
+                                                       return injectedSemi
                               | n <  m -> do saveToken head
                                              setIndentStack ms
                                              return injectedCloseBrace

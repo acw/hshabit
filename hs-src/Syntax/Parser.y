@@ -1,4 +1,6 @@
-{ module Syntax.Parser(parseHabit) where
+--  vim:set filetype=haskell:
+{
+module Syntax.Parser(parseHabit) where
 
 import Data.ByteString.Lazy(ByteString,unpack)
 import Data.Char(chr)
@@ -108,10 +110,10 @@ Decl :: { [Decl] }
   { [$1] }
   | AreaDecl
   { $1 }
---  | ClassDecl
---  { $1 }
---  | InstanceDecl
---  { $1 }
+  | ClassDecl
+  { [$1] }
+  | InstanceDecl
+  { [$1] }
 --  | DataDecl
 --  { $1 }
 --  | Equation
@@ -409,6 +411,89 @@ AreaVar :: { (Name, Maybe Expr) }
   | "(" varsymid ")" "<-" Expr
   { (startName $2, Just $5) }
 
+-- Class Declarations
+
+ClassDecl :: { Decl }
+  : "class" ClassLhs
+  { let (a,b) = $2 in ClassDecl $1 a b [] [] }
+  | "class" ClassLhs "|" CommaConstList
+  { let (a,b) = $2 in ClassDecl $1 a b $4 [] }
+  | "class" ClassLhs "where" DeclBlock
+  { let (a,b) = $2 in ClassDecl $1 a b [] $4 }
+  | "class" ClassLhs "|" CommaConstList "where" DeclBlock
+  { let (a,b) = $2 in ClassDecl $1 a b $4 $6 }
+
+ClassLhs :: { (Type, Maybe Type) }
+  : TypeLhs
+  { ($1, Nothing) }
+  | TypeLhs "=" TypeParam
+  { ($1, Just $3) }
+
+CommaConstList :: { [Constraint] }
+  : Constraint
+  { [$1] }
+  | CommaConstList "," Constraint
+  { $1 ++ [$3] }
+
+Constraint :: { Constraint }
+  : FunDep
+  { $1 }
+  | ConName TypeList
+  { Superclass $1 $2 }
+
+TypeList :: { [Type] }
+  : VarId
+  { [TypeRef $1] }
+  | "(" Type ")"
+  { [$2] }
+  | TypeList VarId
+  { $1 ++ [TypeRef $2] }
+  | TypeList "(" Type ")"
+  { $1 ++ [$3] }
+
+FunDep :: { Constraint }
+  : "->" ListVar
+  { FunDep [] $2 }
+  | ListVar "->" ListVar
+  { FunDep $1 $3 }
+
+ListVar :: { [Name] }
+  : VarId
+  { [$1] }
+  | ListVar VarId
+  { $1 ++ [$2] }
+
+-- Instance Declarations
+InstanceDecl :: { Decl }
+  : "instance" Instances
+  { InstanceDecl $1 $2 }
+
+Instances :: { [Instance] }
+  : Instance
+  { [$1] }
+  | Instances "else" Instance
+  { $1 ++ [$3] }
+
+Instance :: { Instance }
+  : Predicate
+  { Instance $1 [] [] }
+  | Predicate "if" Predicate
+  { Instance $1 $3 [] }
+  | Predicate "if" "(" CommaPreds ")"
+  { Instance $1 $4 [] }
+  | Predicate "where" DeclBlock
+  { Instance $1 [] $3 }
+  | Predicate "if" Predicate "where" DeclBlock
+  { Instance $1 $3 $5 }
+  | Predicate "if" "(" CommaPreds ")" "where" DeclBlock
+  { Instance $1 $4 $7 }
+
+CommaPreds :: { [Predicate] }
+  : Predicate
+  { $1 }
+  | CommaPreds "," Predicate
+  { $1 ++ $3 }
+
 -- Expressions
 Expr :: { Expr }
   : AtomicExpr
@@ -463,8 +548,8 @@ AppliedType :: { Type }
 AtomicType :: { Type }
   : ConName
   { TypeRef $1 }
-  | varid
-  { TypeRef (startName $1) }
+  | VarId
+  { TypeRef $1 }
   | "(" ")"
   { TypeUnit }
   | int
@@ -585,7 +670,6 @@ OLDRULES
 Decl        | Equation                    { 1 }
 
 TopDecl     : Decl                        { 1 }
-            | ClassDecl                   { 1 }
             | InstanceDecl                { 1 }
             | DataDecl                    { 1 }
 
@@ -611,46 +695,6 @@ CommaOpList : Op                                { 1 }
 
 CommaTyopList : Tyop                            { 1 }
               | CommaTyopList "," Tyop          { 1 }
-
--- These are defined in the Nov10 Habit report, page 31
-ClassDecl   : "class" ClassLhs OptConstraints OptWhere  { 1 }
-
-OptConstraints :                            { 1 }
-               | "|" CommaConstList         { 1 }
-
-CommaConstList : Constraint                    { 1 }
-               | CommaConstList "," Constraint { 1 }
-
-ClassLhs    : TypeLhs OptParam                  { 1 }
-
-OptParam    : "=" TypeParam                     { 1 }
-
-TypeLhs     : TypeParam Tyconop TypeParam       { 1 }
-            | PreTypeLhs                        { 1 }
-
-PreTypeLhs  : Tycon                             { 1 }
-            | PreTypeLhs TypeParam              { 1 }
-
-TypeParam   : Var                               { 1 }
-            | "(" TypeParam OptKind ")"         { 1 }
-
-OptKind     :                                   { 1 }
-            | Kind                              { 1 }
-
-Constraint  : FunDep                            { 1 }
-            | Con ConstArgs                     { 1 }
-            | "(" Preds ")"                     { 1 }
-
-ConstArgs   : Type                              { 1 }
-            | ConstArgs Type                    { 1 }
-
-FunDep      : OptListVar "->" ListVar           { 1 }
-
-OptListVar  :                                   { 1 }
-            | ListVar                           { 1 }
-
-ListVar     : Var                               { 1 }
-            | ListVar Var                       { 1 }
 
 -- These are defined in the Nov10 Habit report, page 33
 InstanceDecl
@@ -871,12 +915,21 @@ data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | StructDecl AlexPosn Name (Maybe Type) [StructField] [Name]
                  | BitdataDecl AlexPosn Name (Maybe Type) [BitdataField] [Name]
                  | AreaDecl AlexPosn Name (Maybe Expr) Type
+                 | ClassDecl AlexPosn Type (Maybe Type) [Constraint] [Decl]
+                 | InstanceDecl AlexPosn [Instance]
                  | LocalDecl [Decl] [Decl]
  deriving (Show)
 
 data ImportMods = IncludeOnly [Name]
                 | HidingNames [Name]
                 | NoMods
+ deriving (Show)
+
+data Constraint = FunDep [Name] [Name]
+                | Superclass Name [Type]
+ deriving (Show)
+
+data Instance = Instance [Predicate] [Predicate] [Decl]
  deriving (Show)
 
 data FixityType = FixityLeft | FixityRight | FixityBoth
