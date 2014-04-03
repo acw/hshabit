@@ -114,8 +114,8 @@ Decl :: { [Decl] }
   { [$1] }
   | InstanceDecl
   { [$1] }
---  | DataDecl
---  { $1 }
+  | DataDecl
+  { [$1] }
 --  | Equation
 --  { $1 }
 
@@ -464,6 +464,7 @@ ListVar :: { [Name] }
   { $1 ++ [$2] }
 
 -- Instance Declarations
+
 InstanceDecl :: { Decl }
   : "instance" Instances
   { InstanceDecl $1 $2 }
@@ -493,6 +494,28 @@ CommaPreds :: { [Predicate] }
   { $1 }
   | CommaPreds "," Predicate
   { $1 ++ $3 }
+
+-- Data Declarations
+
+DataDecl :: { Decl }
+  : "data" TypeLhs
+  { DataDecl $1 $2 [] [] [] }
+  | "data" TypeLhs "=" DataCons
+  { DataDecl $1 $2 $4 [] [] }
+  | "data" TypeLhs "|" CommaConstList "=" DataCons
+  { DataDecl $1 $2 $6 [] $4 }
+  | "data" TypeLhs "deriving" DeriveList
+  { DataDecl $1 $2 [] $4 [] }
+  | "data" TypeLhs "=" DataCons "deriving" DeriveList
+  { DataDecl $1 $2 $4 $6 [] }
+  | "data" TypeLhs "|" CommaConstList "=" DataCons "deriving" DeriveList
+  { DataDecl $1 $2 $6 $8 $4 }
+
+DataCons :: { [Type] }
+  : Type
+  { [$1] }
+  | DataCons "|" Type
+  { $1 ++ [$3] }
 
 -- Expressions
 Expr :: { Expr }
@@ -670,7 +693,6 @@ OLDRULES
 Decl        | Equation                    { 1 }
 
 TopDecl     : Decl                        { 1 }
-            | InstanceDecl                { 1 }
             | DataDecl                    { 1 }
 
 -- These are defined in the Nov10 Habit report, page 29
@@ -695,44 +717,6 @@ CommaOpList : Op                                { 1 }
 
 CommaTyopList : Tyop                            { 1 }
               | CommaTyopList "," Tyop          { 1 }
-
--- These are defined in the Nov10 Habit report, page 33
-InstanceDecl
-            : "instance" Instances              { 1 }
-
-Instances   : Instance                          { 1 }
-            | Instances "else" Instance         { 1 }
-
-Instance    : Pred OptIfPreds OptWhere          { 1 }
-
-OptIfPreds  : "if" Preds                        { 1 }
-
-
--- These are defined in the Nov10 Habit report, page 38
-DataDecl    : "data" TypeLhs OptConst OptDerive
-                                          { 1 }
-
-OptConst    :                             { 1 }
-            | "=" DataCons                { 1 }
-
-DataCons    : DataCon                     { 1 }
-            | DataCons "|" DataCon        { 1 }
-
-OptDerive   :                             { 1 }
-            | "deriving" DeriveList       { 1 }
-
-DataCon     : DataCon Conop Type          { 1 }
-            | PreDataCon                  { 1 }
-
-PreDataCon  : Con                         { 1 }
-            | PreDataCon AType            { 1 }
-            | "(" DataCon ")"             { 1 }
-
-DeriveList  : Con                         { 1 }
-            | "(" Cons ")"                { 1 }
-
-Cons        : Con                         { 1 }
-            | Cons "," Con                { 1 }
 
 -- These are defined in the Nov10 Habit report, page 23. I've
 -- switched the Stmts to be left-recursive instead of right, which
@@ -917,6 +901,7 @@ data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | AreaDecl AlexPosn Name (Maybe Expr) Type
                  | ClassDecl AlexPosn Type (Maybe Type) [Constraint] [Decl]
                  | InstanceDecl AlexPosn [Instance]
+                 | DataDecl AlexPosn Type [Type] [Name] [Constraint]
                  | LocalDecl [Decl] [Decl]
  deriving (Show)
 

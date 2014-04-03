@@ -1,0 +1,1 @@
+HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [DataDecl (AlexPn 0 1 1) (TypeApp (TypeRef (Name (AlexPn 5 1 6) False [] "Foo")) [TypeRef (Name (AlexPn 9 1 10) False [] "a")]) [TypeApp (TypeRef (Name (AlexPn 13 1 14) False [] "Bar")) [TypeRef (Name (AlexPn 17 1 18) False [] "a")]] [] []]
