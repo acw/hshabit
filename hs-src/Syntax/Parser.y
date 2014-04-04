@@ -116,8 +116,8 @@ Decl :: { [Decl] }
   { [$1] }
   | DataDecl
   { [$1] }
---  | Equation
---  { $1 }
+  | Equation
+  { $1 }
 
 DeclBlock :: { [Decl] }
   : "{" "}"
@@ -517,20 +517,107 @@ DataCons :: { [Type] }
   | DataCons "|" Type
   { $1 ++ [$3] }
 
+-- Equations
+
+Equation :: { [Decl] }
+  : VarId "=" Expr
+  { [EquationDecl $2 $1 [] Nothing $3] }
+  | VarId GuardEqRhs
+  { map (\f -> f $1 []) $2 }
+  | VarId PatList "=" Expr
+  { [EquationDecl $3 $1 $2 Nothing $4] }
+  | VarId PatList GuardEqRhs
+  { map (\f -> f $1 $2) $3 }
+  | VarId "=" Expr "where" DeclBlock
+  { [LocalDecl $5 [EquationDecl $2 $1 [] Nothing $3]] }
+  | VarId GuardEqRhs "where" DeclBlock
+  { [LocalDecl $4 (map (\f -> f $1 []) $2)] }
+  | VarId PatList "=" Expr "where" DeclBlock
+  { [LocalDecl $6 [EquationDecl $3 $1 $2 Nothing $4]] }
+  | VarId PatList GuardEqRhs "where" DeclBlock
+  { [LocalDecl $5 (map (\f -> f $1 $2) $3)] }
+
+GuardEqRhs :: { [Name -> [Pattern] -> Decl] }
+  : "|" Expr "=" Expr
+  { [\ n p -> EquationDecl $1 n p (Just $2) $4] }
+  | GuardEqRhs "|" Expr "=" Expr
+  { $1 ++ [\ n p -> EquationDecl $2 n p (Just $3) $5] }
+
+PatList :: { [Pattern] }
+  : APat
+  { [$1] }
+  | PatList APat
+  { $1 ++ [$2] }
+
+-- Patterns
+Pat :: { Pattern }
+  : AppPat
+  { $1 }
+  | Pat VarSymId AppPat
+  { PatApply (PatRef $2) [$1, $3] }
+
+AppPat :: { Pattern }
+  : APat
+  { $1 }
+  | AppPat APat
+  { PatApply $1 [$2] }
+
+APat :: { Pattern }
+  : VarId
+  { PatRef $1 }
+  | "_"
+  { PatBlank }
+  | VarId "@" APat
+  { PatNamed $1 $3 }
+  | ConName
+  { PatRef $1 }
+  | ConName "[" "]"
+  { PatStruct $1 [] }
+  | ConName "[" PatFields "]"
+  { PatStruct $1 $3 }
+  | "(" TuplePat ")"
+  { PatTuple $2 }
+  | "(" Pat "::" Type ")"
+  { PatTyped $2 $4 }
+  | "(" Pat ")"
+  { $2 }
+  | Literal
+  { PatConst $1 }
+
+TuplePat :: { [Pattern] }
+  : Pat "," Pat
+  { [$1, $3] }
+  | TuplePat "," Pat
+  { $1 ++ [$3] }
+
+PatFields :: { [(Name, Maybe Pattern)] }
+  : Id
+  { [($1, Nothing)] }
+  | Id "=" Pat
+  { [($1, Just $3)] }
+  | PatFields "," Id
+  { $1 ++ [($3, Nothing)] }
+  | PatFields "," Id "=" Pat
+  { $1 ++ [($3, Just $5)] }
+
 -- Expressions
 Expr :: { Expr }
   : AtomicExpr
   { $1 }
 
 AtomicExpr :: { Expr }
+  : Literal
+  { ExprConst $1 }
+  | VarName
+  { ExprRef $1 }
+
+Literal :: { ConstVal }
   : int
   { translateConst $1 }
   | float
   { translateConst $1 }
   | vec
   { translateConst $1 }
-  | VarName
-  { ExprRef $1 }
 
 -- Types
 
@@ -626,8 +713,6 @@ VarId :: { Name }
   { Name $1 False [] "as" }
   | "hiding"
   { Name $1 False [] "hiding" }
-  | "import"
-  { Name $1 False [] "import" }
   | "lab"
   { Name $1 False [] "lab" }
   | "module"
@@ -693,7 +778,6 @@ OLDRULES
 Decl        | Equation                    { 1 }
 
 TopDecl     : Decl                        { 1 }
-            | DataDecl                    { 1 }
 
 -- These are defined in the Nov10 Habit report, page 29
 Equation    : EqLhs EqRhs                 { 1 }
@@ -902,6 +986,7 @@ data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
                  | ClassDecl AlexPosn Type (Maybe Type) [Constraint] [Decl]
                  | InstanceDecl AlexPosn [Instance]
                  | DataDecl AlexPosn Type [Type] [Name] [Constraint]
+                 | EquationDecl AlexPosn Name [Pattern] (Maybe Expr) Expr
                  | LocalDecl [Decl] [Decl]
  deriving (Show)
 
@@ -927,6 +1012,16 @@ data Expr = ExprConst ConstVal
           | ExprRef Name
   deriving (Show)
 
+data Pattern = PatBlank
+             | PatConst ConstVal
+             | PatRef Name
+             | PatTyped Pattern Type
+             | PatTuple [Pattern]
+             | PatStruct Name [(Name, Maybe Pattern)]
+             | PatNamed Name Pattern
+             | PatApply Pattern [Pattern]
+  deriving (Show)
+
 data Type = WithPredicates [Predicate] Type
           | TypeRef Name
           | TypeUnit
@@ -947,11 +1042,11 @@ data ConstVal = ConstInt AlexPosn Integer Int
               | ConstDouble AlexPosn Double
   deriving (Show)
 
-translateConst :: Lexeme -> Expr
-translateConst (IntConst a b c) = ExprConst (ConstInt a b c)
-translateConst (VecConst a b c d) = ExprConst (ConstVec a b c d)
-translateConst (FloatConst a (FVal f)) = ExprConst (ConstFloat a f)
-translateConst (FloatConst a (DVal d)) = ExprConst (ConstDouble a d)
+translateConst :: Lexeme -> ConstVal
+translateConst (IntConst a b c) = ConstInt a b c
+translateConst (VecConst a b c d) = ConstVec a b c d
+translateConst (FloatConst a (FVal f)) = ConstFloat a f
+translateConst (FloatConst a (DVal d)) = ConstDouble a d
 translateConst _ = error "Incorrect lexeme to translateConst"
 
 data Predicate = Predicate Type (Maybe Type) Bool
