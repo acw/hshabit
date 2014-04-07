@@ -44,11 +44,11 @@ habit :-
 "{-"                                                           { run_comment }
 
 <0> "area"     | "as"       | "bitdata"  | "case"     | "class"    |
-    "data"     | "deriving" | "do"       | "else"     | "extends"  |
-    "fails"    | "hiding"   | "if"       | "import"   | "in"       |
-    "infix"    | "infixl"   | "infixr"   | "instance" | "lab"      |
-    "let"      | "module"   | "nat"      | "of"       | "qualified"|
-    "struct"   | "then"     | "type"     | "where"             { mkReservedId }
+    "data"     | "deriving" | "do"       | "else"     | "fails"    |
+    "hiding"   | "if"       | "import"   | "in"       | "infix"    |
+    "infixl"   | "infixr"   | "instance" | "lab"      | "let"      |
+    "module"   | "nat"      | "of"       | "qualified"| "struct"   |
+    "then"     | "type"     | "where"                          { mkReservedId }
 
 <0> "("        | ")"        | "|"        | "="        | ","        |
     "`"        | "{"        | ";"        | "}"        | "["        |

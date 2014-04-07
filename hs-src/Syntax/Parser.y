@@ -23,7 +23,6 @@ import Syntax.Tokens
   "deriving"    { ReservedId $$ "deriving" }
   "do"          { ReservedId $$ "do" }
   "else"        { ReservedId $$ "else" }
-  "extends"     { ReservedId $$ "else" }
   "fails"       { ReservedId $$ "fails" }
   "hiding"      { ReservedId $$ "hiding" }
   "if"          { ReservedId $$ "if" }
@@ -88,20 +87,18 @@ Habit :: { HabitModule }
 Prog :: { [Decl] }
   :
   { [] }
-  | Decl
+  | TopDecl
   { $1 }
-  | Prog ";" Decl
+  | Prog ";" TopDecl
   { $1 ++ $3 }
 
 -- Declarations
 
-Decl :: { [Decl] }
+TopDecl :: { [Decl] }
   : ImportDecl
   { [$1] }
   | FixityDecl
   { [$1] }
-  | TypeSigDecl
-  { $1 }
   | TypeDecl
   { [$1] }
   | StructDecl
@@ -116,19 +113,25 @@ Decl :: { [Decl] }
   { [$1] }
   | DataDecl
   { [$1] }
+  | StandardDecl
+  { $1 }
+
+StandardDecl :: { [Decl] }
+  : TypeSigDecl
+  { $1 }
   | Equation
   { $1 }
 
 DeclBlock :: { [Decl] }
   : "{" "}"
   { [] }
-  | "{" Decls "}"
+  | "{" StandardDecls "}"
   { $2 }
 
-Decls :: { [Decl] }
-  : Decl
+StandardDecls :: { [Decl] }
+  : StandardDecl
   { $1 }
-  | Decls ";" Decl
+  | StandardDecls ";" StandardDecl
   { $1 ++ $3 }
 
 -- Import Statements
@@ -231,10 +234,10 @@ TyOper :: { Name }
 TypeSigDecl :: { [Decl] }
   : TypeSigNames "::" Type
   { map (\ n -> TypeSigDecl $2 n $3) $1 }
-  | TypeSigNames "::" "(" Predicate ")" "=>" Type
-  { map (\ n -> TypeSigDecl $2 n (WithPredicates $4 $7)) $1 }
   | TypeSigNames "::" Predicate "=>" Type
-  { map (\ n -> TypeSigDecl $2 n (WithPredicates $3 $5)) $1 }
+  { map (\ n -> TypeSigDecl $2 n (WithPredicates [$3] $5)) $1 }
+  | TypeSigNames "::" "(" Predicate ")" "=>" Type
+  { map (\ n -> TypeSigDecl $2 n (WithPredicates [$4] $7)) $1 }
 
 TypeSigNames :: { [Name] }
   : TypeSigName
@@ -248,15 +251,14 @@ TypeSigName :: { Name }
   | "(" VarSymId ")"
   { $2 }
 
-Predicate :: { [Predicate] }
+Predicate :: { Predicate }
   : Type
-  { buildPredicate $1 Nothing False }
+  { Predicate True $1 }
+  | Predicate "fails"
+  { let Predicate b t = $1
+    in Predicate (not b) t }
   | Type "=" Type
-  { buildPredicate $1 (Just $3) False }
-  | Type "fails"
-  { buildPredicate $1 Nothing True }
-  | Type "=" Type "fails"
-  { buildPredicate $1 (Just $3) True }
+  { Predicate True $1 }
 
 -- Type Declarations
 
@@ -477,23 +479,13 @@ Instances :: { [Instance] }
 
 Instance :: { Instance }
   : Predicate
-  { Instance $1 [] [] }
+  { Instance [$1] [] [] }
   | Predicate "if" Predicate
-  { Instance $1 $3 [] }
-  | Predicate "if" "(" CommaPreds ")"
-  { Instance $1 $4 [] }
+  { Instance [$1] [$3] [] }
   | Predicate "where" DeclBlock
-  { Instance $1 [] $3 }
+  { Instance [$1] [] $3 }
   | Predicate "if" Predicate "where" DeclBlock
-  { Instance $1 $3 $5 }
-  | Predicate "if" "(" CommaPreds ")" "where" DeclBlock
-  { Instance $1 $4 $7 }
-
-CommaPreds :: { [Predicate] }
-  : Predicate
-  { $1 }
-  | CommaPreds "," Predicate
-  { $1 ++ $3 }
+  { Instance [$1] [$3] $5 }
 
 -- Data Declarations
 
@@ -601,15 +593,73 @@ PatFields :: { [(Name, Maybe Pattern)] }
   { $1 ++ [($3, Just $5)] }
 
 -- Expressions
+
 Expr :: { Expr }
+  : NonInfixExpr
+  { undefined }
+  | Expr "::" Type
+  { undefined }
+  | Expr VarSymId NonInfixExpr
+  { undefined }
+
+NonInfixExpr :: { Expr }
+  : "let" DeclBlock "in" Expr
+  { undefined }
+  | "if" Expr "then" Expr "else" Expr
+  { ExprIf $2 $4 $6 }
+  | "if" "<-" Expr "then" Block "else" Block
+  { undefined }
+  | "case" Expr "of" ExprAlts
+  { ExprCase $2 $4 }
+  | "case" "<-" Expr "of" BlockAlts
+  { undefined }
+  | "do" Block
+  { undefined }
+  | "\\" PatList "->" Expr
+  { undefined }
+  | CallExpr
+  { undefined }
+
+CallExpr :: { Expr }
+  : RefExpr
+  { $1 }
+  | CallExpr RefExpr
+  { undefined }
+
+RefExpr :: { Expr }
   : AtomicExpr
   { $1 }
+  | RefExpr "." varid
+  { undefined }
+  | RefExpr "[" Fields "]"
+  { undefined }
+  | RefExpr "[" StructFldInit "]"
+  { undefined }
+ 
+
+Fields :: { Int }
+  : VarId
+  { undefined }
+  | VarId "=" Expr
+  { undefined }
+  | Fields "|" VarId
+  { undefined }
+  | Fields "|" VarId "=" Expr
+  { undefined }
+
+StructFldInit :: { Int }
+  : VarName "<-" Expr
+  { undefined }
+  | StructFldInit "|" VarName "<-" Expr
+  { undefined }
 
 AtomicExpr :: { Expr }
   : Literal
   { ExprConst $1 }
   | VarName
   { ExprRef $1 }
+  | "(" Expr ")"
+  { $2 }
 
 Literal :: { ConstVal }
   : int
@@ -618,44 +668,104 @@ Literal :: { ConstVal }
   { translateConst $1 }
   | vec
   { translateConst $1 }
+  | "(" ")"
+  { undefined }
+  | "#." Id
+  { undefined }
+
+-- case exp/stmt stuff
+
+ExprAlts :: { [ExprCase] }
+  : "{" SemiSepAltExprs "}"
+  { $2 }
+
+SemiSepAltExprs :: { [ExprCase] }
+  : AltExpr
+  { $1 }
+  | SemiSepAltExprs ";" AltExpr
+  { $1 ++ $3 }
+
+AltExpr :: { [ExprCase] }
+  : Pat ExprRhs1
+  { map (\ f -> f $1) $2 }
+  | Pat ExprRhs1 "where" DeclBlock
+  { [WhereCase $4 (map (\ f -> f $1) $2)] }
+
+ExprRhs1 :: { [Pattern -> ExprCase] }
+  : "->" Expr
+  { [\ p -> Case p Nothing $2] }
+  | GuardListExpr
+  { $1 }
+
+GuardListExpr :: { [Pattern -> ExprCase] }
+  : "|" Expr "->" Expr
+  { [\ p -> Case p (Just $2) $4]  }
+  | GuardListExpr "|" Expr "->" Expr
+  { $1 ++ [\ p -> Case p (Just $3) $5] }
+
+BlockAlts :: { [BlockCase] }
+  : "{" SemiSepAltBlocks "}"
+  { $2 }
+
+SemiSepAltBlocks :: { [BlockCase] }
+  : AltBlock
+  { $1 }
+  | SemiSepAltBlocks ";" AltBlock
+  { $1 ++ $3 }
+
+AltBlock :: { [BlockCase] }
+  : Pat BlockRhs1
+  { map (\ f -> f $1) $2 }
+  | Pat BlockRhs1 "where" DeclBlock
+  { [WhereCase $4 (map (\ f -> f $1) $2)] }
+
+BlockRhs1 :: { [Pattern -> BlockCase] }
+  : "->" Block
+  { [\ p -> Case p Nothing $2] }
+  | GuardListBlock
+  { $1 }
+
+GuardListBlock :: { [Pattern -> BlockCase] }
+  : "|" Block "->" Block
+  { [\ p -> Case p (Just $2) $4]  }
+  | GuardListBlock "|" Block "->" Block
+  { $1 ++ [\ p -> Case p (Just $3) $5] }
+
+-- Statements
+
+Block :: { Int }
+  : "{" Statements "}"
+  { undefined }
+
+Statements :: { Int }
+  : Statement ";" Statements
+  { undefined }
+  | VarId "<-" Statement ";" Statements
+  { undefined }
+  | "let" DeclBlock ";" Statements
+  { undefined }
+  | Statement
+  { undefined }
+
+Statement :: { Int }
+  : Expr
+  { undefined }
+  | "let" DeclBlock "in" Block
+  { undefined }
+  | "if" Expr "then" Block
+  { undefined }
+  | "if" Expr "then" Block "else" Block
+  { undefined }
+  | "case" Expr "of" BlockAlts
+  { undefined }
+  -- The case<- item should be covered by Expr, above
 
 -- Types
 
-Type :: { Type }
-  : TupleType "::" Kind
-  { TypeKind $1 $3 }
-  | TupleType
-  { $1 }
-
-UnkindedType :: { Type }
-  : TupleType
-  { $1 }
-
-TupleType :: { Type }
-  : "(" TupleTypeCommas ")"
-  { TypeTuple $2 }
-  | InfixType
-  { $1 }
-
-TupleTypeCommas :: { [Type] }
-  : TupleType "," TupleType
-  { [$1, $3] }
-  | TupleTypeCommas "," TupleType
-  { $1 ++ [$3] }
-
-InfixType :: { Type }
-  : InfixType TyOp AppliedType
-  { TypeApp (TypeRef $2) [$1, $3] }
-  | AppliedType
-  { $1 }
-
-AppliedType :: { Type }
-  : AppliedType AtomicType
-  { TypeApp $1 [$2] }
-  | AtomicType
-  { $1 }
-
 AtomicType :: { Type }
+  : int
+  { undefined }
+{-
   : ConName
   { TypeRef $1 }
   | VarId
@@ -666,10 +776,52 @@ AtomicType :: { Type }
   { let IntConst _ v _ = $1 in TypeInt v }
   | "#." Id
   { TypeLabel $2 }
-  | "(" TyOp ")"
+  | "(" TyOper ")"
   { TypeRef $2 }
+  | "(" TupleTypeCommas ")"
+  { $2 }
   | "(" Type ")"
   { $2 }
+  -}
+
+AppliedType :: { Type }
+  : AtomicType
+  { $1 }
+  | AppliedType AtomicType
+  { TypeApp $1 [$2] }
+
+InfixType :: { Type }
+  : AtomicType
+  { $1 }
+  | InfixType "`" VarId "`" AppliedType
+  { undefined }
+  | InfixType "`" ModName VarId "`" AppliedType
+  { undefined }
+  | InfixType consymid AppliedType
+  { undefined }
+  | InfixType "`" ModName "`" AppliedType
+  { undefined }
+  | InfixType VarSymId AppliedType
+  { undefined }
+  | InfixType "->" AppliedType
+  { undefined }
+
+UnkindedType :: { Type }
+  : InfixType
+  { $1 }
+
+Type :: { Type }
+  : Type "::" Kind
+  { TypeKind $1 $3 }
+  | InfixType
+  { $1 }
+
+TupleTypeCommas :: { [Type] }
+  : Type "," Type
+  { [$1, $3] }
+  | TupleTypeCommas "," Type
+  { $1 ++ [$3] }
+
 
 -- Kinds
 
@@ -735,8 +887,6 @@ VarName :: { Name }
   { startName $2 }
   | ModName "." VarId
   { addName' $1 $3 }
-  | ModName
-  { $1 }
   | ModName "." "(" VarSymId ")"
   { addName' $1 $4 }
   | ModName "." "(" consymid ")"
@@ -748,228 +898,12 @@ ConName :: { Name }
   | ModName "." "(" consymid ")"
   { addName $1 $4 }
 
-TyOp :: { Name }
-  : consymid
-  { startName $1 }
-  | varsymid
-  { startName $1 }
-  | "`" conid "`"
-  { startName $2 }
-  | ModName "." consymid
-  { addName $1 $3 }
-  | ModName "." varsymid
-  { addName $1 $3 }
-  | ModName "." "`" conid "`"
-  { addName $1 $4 }
-  | "->"
-  { Name $1 False [] "->" }
-
 Id :: { Name }
   : varid
   { startName $1 }
   | conid
   { startName $1 }
 
-
-{-
-
-OLDRULES
-
-Decl        | Equation                    { 1 }
-
-TopDecl     : Decl                        { 1 }
-
--- These are defined in the Nov10 Habit report, page 29
-Equation    : EqLhs EqRhs                 { 1 }
-
-EqLhs       : Var OptPatList              { 1 }
-
-OptPatList  :                             { 1 }
-            | OptPatList APat             { 1 }
-
-EqRhs       : EqRhs1 OptWhere             { 1 }
-
-EqRhs1      : "=" Expr                    { 1 }
-            | GuardEqRhs                  { 1 }
-
-GuardEqRhs  : "|" Expr "=" Expr             { 1 }
-            | GuardEqRhs "|" Expr "=" Expr  { 1 }
-
--- These are defined in the Nov10 Habit report, page 30
-CommaOpList : Op                                { 1 }
-            | CommaOpList "," Op                { 1 }
-
-CommaTyopList : Tyop                            { 1 }
-              | CommaTyopList "," Tyop          { 1 }
-
--- These are defined in the Nov10 Habit report, page 23. I've
--- switched the Stmts to be left-recursive instead of right, which
--- will admit incorrect programs. But those are easily checked for
--- later.
-Block       : "{" Stmts "}"               { 1 }
-
-Stmts       : Stmt                        { 1 }
---            | Stmts ";" "let" DeclBlock   { 1 }
---            | Stmts ";" OptAssign Stmt    { 1 }
-
-OptAssign   :                             { 1 }
-            | Var "<-"                    { 1 }
-
--- These are defined in the Nov10 Habit report, page 22
-Stmt        : Applic                      { 1 }
-            | LetStmt                     { 1 }
-            | IfStmt                      { 1 }
-            | CaseStmt                    { 1 }
-
-
--- These are defined in the Nov10 Habit report, page 22
-Expr        : Applic                      { 1 }
-            | LetExpr                     { 1 }
-            | IfExpr                      { 1 }
-            | CaseExpr                    { 1 }
-
--- These are defined in the Nov10 Habit report, page 22
-Applic      : "\\" APatList "->" Expr     { 1 }
-            | "do" Block                  { 1 }
-            | InfExpr OptType             { 1 }
-
-APatList    : APat                        { 1 }
-            | APatList APat               { 1 }
-
-OptType     :                             { 1 }
-            | "::" Type                   { 1 }
-
-InfExpr     : AppExpr InfixOpList         { 1 }
-
-InfixOpList :                             { 1 }
-            | InfixOpList Op AppExpr      { 1 }
-
-AppExpr     : AExpr                       { 1 }
-            | AppExpr AExpr               { 1 }
-
-AExpr       : Var                         { 1 }
-            | Con                         { 1 }
-            | Literal                     { 1 }
-            | AExpr "." Id                { 1 }
-            | AExpr "[" Fields "]"        { 1 }
-            | "(" ")"                     { 1 }
-            | "(" Expr ")"                { 1 }
-            | "(" AExpr Op ")"            { 1 }
-            | "(" Op AExpr ")"            { 1 }
-            | "(" TupleExprs ")"          { 1 }
-            | conid "[" StructFldInit "]" { 1 }
-
-TupleExprs  : Expr "," Expr               { 1 }
-            | TupleExprs "," Expr         { 1 }
-
-StructFldInit : Id "<-" Expr                    { 1 }
-              | StructFldInit "|" Id "<-" Expr  { 1 }
-
-Fields        : Id OptFieldInit              { 1 }
-              | Fields "|" Id OptFieldInit   { 1 }
-
-OptFieldInit  :                           { 1 }
-              | "=" Expr                  { 1 }
-
-Literal     : int                         { 1 }
-            | vec                         { 1 }
-            | float                       { 1 }
-            | "#." Id                     { 1 }
-
--- These are defined in the Nov10 Habit report, page 24
-LetExpr     : "let" DeclBlock "in" Expr   { 1 }
-
-LetStmt     : "let" DeclBlock "in" Block  { 1 }
-
-DeclBlock   : "{" OptDecls "}"            { 1 }
-
-OptDecls    :                             { 1 }
-            | SemiSepDecls                { 1 }
-
-SemiSepDecls : Decl                       { 1 }
-             | SemiSepDecls ";" Decl      { 1 }
-
--- These are defined in the Nov10 Habit report, page 25
-IfExpr      : "if" Expr "then" Expr "else" Expr     { 1 }
-            | IfFrom                                { 1 }
-
-IfStmt      : "if" Expr "then" Block OptElseBlock   { 1 }
-            | IfFrom                                { 1 }
-
-IfFrom      : "if" "<-" Stmt "then" Block OptElseBlock { 1 }
-
-OptElseBlock :                              { 1 }
-             | "else" Block                 { 1 }
-
-CaseExpr    : "case" Expr "of" ExprAlts     { 1 }
-            | CaseFrom                      { 1 }
-
-CaseStmt    : "case" Expr "of" BlockAlts    { 1 }
-            | CaseFrom                      { 1 }
-
-CaseFrom    : "case" "<-" Stmt "of" BlockAlts { 1 }
-
-ExprAlts    : "{" SemiSepAltExprs "}"       { 1 }
-
-BlockAlts   : "{" SemiSepAltBlocks "}"      { 1 }
-
-SemiSepAltExprs : AltExpr                           { 1 }
-                | SemiSepAltExprs ";" AltExpr       { 1 }
-
-SemiSepAltBlocks : AltBlock                        { 1 }
-                 | SemiSepAltBlocks ";" AltBlock   { 1 }
-
-AltExpr : Pat ExprRhs1 OptWhere                     { 1 }
-
-ExprRhs1 : "->" Expr                                { 1 }
-         | GuardListExpr                            { 1 }
-
-OptWhere : "where" DeclBlock                        { 1 }
-
-GuardListExpr : "|" Expr "->" Expr                  { 1 }
-              | GuardListExpr "|" Expr "->" Expr    { 1 }
-
-AltBlock : Pat BlockRhs1 OptWhere                   { 1 }
-
-BlockRhs1 : "->" Block                              { 1 }
-          | GuardListBlock                          { 1 }
-
-GuardListBlock : "|" Expr "->" Block                { 1 }
-               | GuardListBlock "|" Expr "->" Block { 1 }
-
--- These are defined in the Nov10 Habit report, page 26
-Pat         : AppPat                      { 1 }
-            | Pat Op AppPat               { 1 }
-
-AppPat      : APat                        { 1 }
-            | AppPat APat                 { 1 }
-
-APat        : Var                         { 1 }
-            | "_"                         { 1 }
-            | Var "@" APat                { 1 }
-            | Con                         { 1 }
-            | Con "[" PatFields "]"       { 1 }
-            | "(" TuplePat ")"            { 1 }
-            | "(" Pat "::" Type ")"       { 1 }
-            | "(" Pat ")"                 { 1 }
-            | Literal                     { 1 }
-
-TuplePat    : Pat "," Pat                 { 1 }
-            | TuplePat "," Pat            { 1 }
-
-PatFields   :                             { 1 }
-            | PatFieldsComma              { 1 }
-
-PatFieldsComma
-            : Id OptEqPat                 { 1 }
-            | PatFieldsComma Id OptEqPat  { 1 }
-
-OptEqPat    :                             { 1 }
-            | "=" Pat                     { 1 }
-
-
-
--}
 
 {
 
@@ -1010,6 +944,13 @@ type BitdataField = (Name, [Either Expr (Name, Maybe Expr, Type)])
 
 data Expr = ExprConst ConstVal
           | ExprRef Name
+          | ExprLet [Decl] Expr
+          | ExprIf Expr Expr Expr
+          | ExprCase Expr [ExprCase]
+  deriving (Show)
+
+data ExprCase = Case Pattern (Maybe Expr) Expr
+              | WhereCase [Decl] [ExprCase]
   deriving (Show)
 
 data Pattern = PatBlank
@@ -1049,17 +990,8 @@ translateConst (FloatConst a (FVal f)) = ConstFloat a f
 translateConst (FloatConst a (DVal d)) = ConstDouble a d
 translateConst _ = error "Incorrect lexeme to translateConst"
 
-data Predicate = Predicate Type (Maybe Type) Bool
+data Predicate = Predicate Bool Type
   deriving (Show)
-
-buildPredicate :: Type -> (Maybe Type) -> Bool -> [Predicate]
-buildPredicate (TypeTuple ps) Nothing False =
-  concatMap (\ x -> buildPredicate x Nothing False) ps
-buildPredicate (TypeTuple _) _ _ =
-  error "Unexpected tuple in predicate position."
-buildPredicate x@(TypeApp _ _) y z = [Predicate x y z]
-buildPredicate _ _ _ =
-  error "Unexpected type in predicate position."
 
 data Name       = Name AlexPosn Bool [String] String
  deriving (Show)

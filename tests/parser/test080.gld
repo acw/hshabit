@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [InstanceDecl (AlexPn 0 1 1) [Instance [Predicate (TypeApp (TypeRef (Name (AlexPn 9 1 10) False [] "Foo")) [TypeRef (Name (AlexPn 13 1 14) False [] "a")]) Nothing False] [] []]]
+HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [InstanceDecl (AlexPn 0 1 1) [Instance [Predicate True (TypeApp (TypeRef (Name (AlexPn 9 1 10) False [] "Foo")) [TypeRef (Name (AlexPn 13 1 14) False [] "a")])] [] []]]
