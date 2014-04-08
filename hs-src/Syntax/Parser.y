@@ -192,42 +192,16 @@ Prec :: { Maybe Integer }
   { let IntConst _ v _ = $1 in Just v }
 
 CommaOpList :: { [Name] }
-  : Oper
+  : VarSymId
   { [$1] }
-  | CommaOpList "," Oper
+  | CommaOpList "," VarSymId
   { $1 ++ [$3] }
 
 CommaTyopList :: { [Name] }
-  : TyOper
+  : ConSymId
   { [$1] }
-  | CommaTyopList "," TyOper
+  | CommaTyopList "," ConSymId
   { $1 ++ [$3] }
-
-Oper :: { Name }
-  : VarSymId
-  { $1 }
-  | "`" VarId "`"
-  { $2 }
-  | "`" ModName "." VarId "`"
-  { addName' $2 $4 }
-  | consymid
-  { startName $1 }
-  | "`" ModName "`"
-  { $2 }
-
-TyOper :: { Name }
-  : "`" VarId "`"
-  { $2 }
-  | "`" ModName VarId "`"
-  { addName' $2 $3 }
-  | consymid
-  { startName $1 }
-  | "`" ModName "`"
-  { $2 }
-  | VarSymId
-  { $1 }
-  | "->"
-  { Name $1 False [] "->" }
 
 -- Type Signatures
 
@@ -236,8 +210,6 @@ TypeSigDecl :: { [Decl] }
   { map (\ n -> TypeSigDecl $2 n $3) $1 }
   | TypeSigNames "::" Predicate "=>" Type
   { map (\ n -> TypeSigDecl $2 n (WithPredicates [$3] $5)) $1 }
-  | TypeSigNames "::" "(" Predicate ")" "=>" Type
-  { map (\ n -> TypeSigDecl $2 n (WithPredicates [$4] $7)) $1 }
 
 TypeSigNames :: { [Name] }
   : TypeSigName
@@ -253,12 +225,25 @@ TypeSigName :: { Name }
 
 Predicate :: { Predicate }
   : Type
-  { Predicate True $1 }
-  | Predicate "fails"
-  { let Predicate b t = $1
-    in Predicate (not b) t }
+  { Predicate Nothing $1 }
   | Type "=" Type
-  { Predicate True $1 }
+  { Predicate (Just $1) $3 }
+  | Type "fails"
+  { FailPredicate (Predicate Nothing $1) }
+  | Type "=" Type "fails"
+  { FailPredicate (Predicate (Just $1) $3) }
+  | SelPred "=" Type
+  { $1 $3 }
+  | SelPred "=" Type "fails"
+  { FailPredicate ($1 $3) }
+  | "(" Predicate ")"
+  { $2 }
+
+SelPred :: { Type -> Predicate }
+  : AtomicType "." Id
+  { SelectPredicate $1 $3 }
+  | "(" SelPred ")"
+  { $2 }
 
 -- Type Declarations
 
@@ -317,7 +302,7 @@ StructRegions :: { [StructField] }
   { $1 ++ $3 }
 
 StructRegion :: { [StructField] }
-  : UnkindedType
+  : Type
   { [(Nothing, Nothing, $1)] }
   | FieldNames "::" Type
   { map (\ (a,b) -> (Just a, b, $3)) $1 }
@@ -386,7 +371,7 @@ BitdataField :: { Either Expr (Name, Maybe Expr, Type) }
   { Right (startName $1, Nothing, $3) }
   | varid "=" Expr "::" Type
   { Right (startName $1, Just $3, $5) }
-  | Expr
+  | AtomicExpr
   { Left $1 }
 
 -- Area Declarations
@@ -468,14 +453,11 @@ ListVar :: { [Name] }
 -- Instance Declarations
 
 InstanceDecl :: { Decl }
-  : "instance" Instances
-  { InstanceDecl $1 $2 }
-
-Instances :: { [Instance] }
-  : Instance
-  { [$1] }
-  | Instances "else" Instance
-  { $1 ++ [$3] }
+  : "instance" Instance
+  { InstanceDecl $1 [$2] }
+  | InstanceDecl "else" Instance
+  { let InstanceDecl src xs = $1
+    in InstanceDecl src (xs ++ [$3]) }
 
 Instance :: { Instance }
   : Predicate
@@ -595,63 +577,66 @@ PatFields :: { [(Name, Maybe Pattern)] }
 -- Expressions
 
 Expr :: { Expr }
-  : NonInfixExpr
-  { undefined }
-  | Expr "::" Type
-  { undefined }
-  | Expr VarSymId NonInfixExpr
-  { undefined }
+  : ComplexExpr
+  { $1 }
 
-NonInfixExpr :: { Expr }
-  : "let" DeclBlock "in" Expr
-  { undefined }
+ComplexExpr :: { Expr }
+  : InfixExpr
+  { $1 }
+  | "let" DeclBlock "in" Expr
+  { ExprLet $2 $4 }
   | "if" Expr "then" Expr "else" Expr
   { ExprIf $2 $4 $6 }
   | "if" "<-" Expr "then" Block "else" Block
-  { undefined }
+  { ExprIfM $3 $5 $7 }
   | "case" Expr "of" ExprAlts
   { ExprCase $2 $4 }
   | "case" "<-" Expr "of" BlockAlts
-  { undefined }
+  { ExprCaseM $3 $5 }
   | "do" Block
-  { undefined }
+  { ExprDo $2 }
   | "\\" PatList "->" Expr
-  { undefined }
+  { ExprLambda $2 $4 }
+
+InfixExpr :: { Expr }
+  : InfixExpr VarSymId CallExpr
+  { ExprInfix $1 $2 $3 }
+  | InfixExpr "::" Type
+  { ExprType $1 $3 }
   | CallExpr
-  { undefined }
+  { $1 }
 
 CallExpr :: { Expr }
-  : RefExpr
+  : CallExpr RefExpr
+  { ExprApply $1 $2 }
+  | RefExpr
   { $1 }
-  | CallExpr RefExpr
-  { undefined }
 
 RefExpr :: { Expr }
-  : AtomicExpr
-  { $1 }
-  | RefExpr "." varid
-  { undefined }
+  : RefExpr "." VarId
+  { ExprFldRef $1 $3 }
   | RefExpr "[" Fields "]"
-  { undefined }
+  { ExprUpdate $1 $3 }
   | RefExpr "[" StructFldInit "]"
-  { undefined }
- 
+  { ExprBuild $1 $3 }
+  | AtomicExpr
+  { $1 }
 
-Fields :: { Int }
+Fields :: { [(Name, Maybe Expr)] }
   : VarId
-  { undefined }
+  { [($1, Nothing)] }
   | VarId "=" Expr
-  { undefined }
+  { [($1, Just $3)] }
   | Fields "|" VarId
-  { undefined }
+  { $1 ++ [($3, Nothing)] }
   | Fields "|" VarId "=" Expr
-  { undefined }
+  { $1 ++ [($3, Just $5)] }
 
-StructFldInit :: { Int }
+StructFldInit :: { [(Name, Expr)] }
   : VarName "<-" Expr
-  { undefined }
+  { [($1, $3)] }
   | StructFldInit "|" VarName "<-" Expr
-  { undefined }
+  { $1 ++ [($3, $5)] }
 
 AtomicExpr :: { Expr }
   : Literal
@@ -669,9 +654,9 @@ Literal :: { ConstVal }
   | vec
   { translateConst $1 }
   | "(" ")"
-  { undefined }
+  { ConstUnit $1 }
   | "#." Id
-  { undefined }
+  { ConstLabel $1 $2 }
 
 -- case exp/stmt stuff
 
@@ -689,19 +674,19 @@ AltExpr :: { [ExprCase] }
   : Pat ExprRhs1
   { map (\ f -> f $1) $2 }
   | Pat ExprRhs1 "where" DeclBlock
-  { [WhereCase $4 (map (\ f -> f $1) $2)] }
+  { [EWhereCase $4 (map (\ f -> f $1) $2)] }
 
 ExprRhs1 :: { [Pattern -> ExprCase] }
   : "->" Expr
-  { [\ p -> Case p Nothing $2] }
+  { [\ p -> ECase p Nothing $2] }
   | GuardListExpr
   { $1 }
 
 GuardListExpr :: { [Pattern -> ExprCase] }
   : "|" Expr "->" Expr
-  { [\ p -> Case p (Just $2) $4]  }
+  { [\ p -> ECase p (Just $2) $4]  }
   | GuardListExpr "|" Expr "->" Expr
-  { $1 ++ [\ p -> Case p (Just $3) $5] }
+  { $1 ++ [\ p -> ECase p (Just $3) $5] }
 
 BlockAlts :: { [BlockCase] }
   : "{" SemiSepAltBlocks "}"
@@ -717,55 +702,52 @@ AltBlock :: { [BlockCase] }
   : Pat BlockRhs1
   { map (\ f -> f $1) $2 }
   | Pat BlockRhs1 "where" DeclBlock
-  { [WhereCase $4 (map (\ f -> f $1) $2)] }
+  { [BWhereCase $4 (map (\ f -> f $1) $2)] }
 
 BlockRhs1 :: { [Pattern -> BlockCase] }
   : "->" Block
-  { [\ p -> Case p Nothing $2] }
+  { [\ p -> BCase p Nothing $2] }
   | GuardListBlock
   { $1 }
 
 GuardListBlock :: { [Pattern -> BlockCase] }
-  : "|" Block "->" Block
-  { [\ p -> Case p (Just $2) $4]  }
-  | GuardListBlock "|" Block "->" Block
-  { $1 ++ [\ p -> Case p (Just $3) $5] }
+  : "|" Expr "->" Block
+  { [\ p -> BCase p (Just $2) $4]  }
+  | GuardListBlock "|" Expr "->" Block
+  { $1 ++ [\ p -> BCase p (Just $3) $5] }
 
 -- Statements
 
-Block :: { Int }
+Block :: { [Statement] }
   : "{" Statements "}"
-  { undefined }
+  { $2 }
 
-Statements :: { Int }
+Statements :: { [Statement] }
   : Statement ";" Statements
-  { undefined }
+  { $1 : $3 }
   | VarId "<-" Statement ";" Statements
-  { undefined }
+  { StmtBind $1 $3 : $5 }
   | "let" DeclBlock ";" Statements
-  { undefined }
+  { StmtLet $2 [] : $4 }
   | Statement
-  { undefined }
+  { [$1] }
 
-Statement :: { Int }
+Statement :: { Statement }
   : Expr
-  { undefined }
+  { StmtExpr $1 }
   | "let" DeclBlock "in" Block
-  { undefined }
+  { StmtLet $2 $4 }
   | "if" Expr "then" Block
-  { undefined }
+  { StmtIf $2 $4 [] }
   | "if" Expr "then" Block "else" Block
-  { undefined }
+  { StmtIf $2 $4 $6 }
   | "case" Expr "of" BlockAlts
-  { undefined }
+  { StmtCase $2 $4 }
   -- The case<- item should be covered by Expr, above
 
 -- Types
 
 AtomicType :: { Type }
-  : int
-  { undefined }
-{-
   : ConName
   { TypeRef $1 }
   | VarId
@@ -776,13 +758,10 @@ AtomicType :: { Type }
   { let IntConst _ v _ = $1 in TypeInt v }
   | "#." Id
   { TypeLabel $2 }
-  | "(" TyOper ")"
-  { TypeRef $2 }
-  | "(" TupleTypeCommas ")"
-  { $2 }
   | "(" Type ")"
   { $2 }
-  -}
+  | "(" Type "::" Kind ")"
+  { TypeKind $2 $4 }
 
 AppliedType :: { Type }
   : AtomicType
@@ -791,30 +770,16 @@ AppliedType :: { Type }
   { TypeApp $1 [$2] }
 
 InfixType :: { Type }
-  : AtomicType
+  : AppliedType
   { $1 }
-  | InfixType "`" VarId "`" AppliedType
-  { undefined }
-  | InfixType "`" ModName VarId "`" AppliedType
-  { undefined }
-  | InfixType consymid AppliedType
-  { undefined }
-  | InfixType "`" ModName "`" AppliedType
-  { undefined }
-  | InfixType VarSymId AppliedType
-  { undefined }
-  | InfixType "->" AppliedType
-  { undefined }
-
-UnkindedType :: { Type }
-  : InfixType
-  { $1 }
+  | InfixType ConSymName AppliedType
+  { TypeApp (TypeRef $2) [$1, $3] }
 
 Type :: { Type }
-  : Type "::" Kind
-  { TypeKind $1 $3 }
-  | InfixType
+  : InfixType
   { $1 }
+  | "(" TupleTypeCommas ")"
+  { TypeTuple $2 }
 
 TupleTypeCommas :: { [Type] }
   : Type "," Type
@@ -845,8 +810,13 @@ AtomicKind :: { Kind }
   | "(" Kind ")"
   { $2 }
 
-
 --
+
+ModName :: { Name }
+  : conid
+  { startName $1 }
+  | ModName "." conid
+  { addName $1 $3 }
 
 VarSymId :: { Name }
   : varsymid
@@ -855,8 +825,16 @@ VarSymId :: { Name }
   { Name $1 False [] "*" }
   | "/"
   { Name $1 False [] "/" }
+  | "`" VarId "`"
+  { $2 }
+
+ConSymId :: { Name }
+  : consymid
+  { startName $1 }
   | ":#"
   { Name $1 False [] ":#" }
+  | "->"
+  { Name $1 False [] "->" }
 
 VarId :: { Name }
   : varid
@@ -872,31 +850,33 @@ VarId :: { Name }
   | "qualified"
   { Name $1 False [] "qualified" }
 
-ModName :: { Name }
-  : conid
-  { startName $1 }
-  | ModName "." conid
-  { addName $1 $3 }
-
 VarName :: { Name }
   : VarId
   { $1 }
   | "(" VarSymId ")"
   { $2 }
-  | "(" consymid ")"
-  { startName $2 }
+  | "(" ConSymId ")"
+  { $2 }
   | ModName "." VarId
   { addName' $1 $3 }
   | ModName "." "(" VarSymId ")"
   { addName' $1 $4 }
-  | ModName "." "(" consymid ")"
-  { addName $1 $4 }
+  | ModName "." "(" ConSymId ")"
+  { addName' $1 $4 }
 
 ConName :: { Name }
   : ModName
   { $1 }
-  | ModName "." "(" consymid ")"
-  { addName $1 $4 }
+  | ModName "." "(" ConSymId ")"
+  { addName' $1 $4 }
+
+ConSymName :: { Name }
+  : ConSymId
+  { $1 }
+  | ModName "." ConSymId
+  { addName' $1 $3 }
+  | "`" ConName "`"
+  { $2 }
 
 Id :: { Name }
   : varid
@@ -946,11 +926,33 @@ data Expr = ExprConst ConstVal
           | ExprRef Name
           | ExprLet [Decl] Expr
           | ExprIf Expr Expr Expr
+          | ExprIfM Expr [Statement] [Statement]
           | ExprCase Expr [ExprCase]
+          | ExprCaseM Expr [BlockCase]
+          | ExprDo [Statement]
+          | ExprLambda [Pattern] Expr
+          | ExprType Expr Type
+          | ExprInfix Expr Name Expr
+          | ExprApply Expr Expr
+          | ExprFldRef Expr Name
+          | ExprUpdate Expr [(Name, Maybe Expr)]
+          | ExprBuild Expr [(Name, Expr)]
   deriving (Show)
 
-data ExprCase = Case Pattern (Maybe Expr) Expr
-              | WhereCase [Decl] [ExprCase]
+data Statement = StmtBind Name Statement
+               | StmtLet [Decl] [Statement]
+               | StmtExpr Expr
+               | StmtIf Expr [Statement] [Statement]
+               | StmtCase Expr [BlockCase]
+  deriving (Show)
+
+data ExprCase = ECase Pattern (Maybe Expr) Expr
+              | EWhereCase [Decl] [ExprCase]
+  deriving (Show)
+
+
+data BlockCase = BCase Pattern (Maybe Expr) [Statement]
+               | BWhereCase [Decl] [BlockCase]
   deriving (Show)
 
 data Pattern = PatBlank
@@ -981,6 +983,8 @@ data ConstVal = ConstInt AlexPosn Integer Int
               | ConstVec AlexPosn Integer Int Int
               | ConstFloat AlexPosn Float
               | ConstDouble AlexPosn Double
+              | ConstUnit AlexPosn
+              | ConstLabel AlexPosn Name
   deriving (Show)
 
 translateConst :: Lexeme -> ConstVal
@@ -990,7 +994,9 @@ translateConst (FloatConst a (FVal f)) = ConstFloat a f
 translateConst (FloatConst a (DVal d)) = ConstDouble a d
 translateConst _ = error "Incorrect lexeme to translateConst"
 
-data Predicate = Predicate Bool Type
+data Predicate = Predicate (Maybe Type) Type
+               | SelectPredicate Type Name Type
+               | FailPredicate Predicate
   deriving (Show)
 
 data Name       = Name AlexPosn Bool [String] String
