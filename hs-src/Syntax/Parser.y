@@ -164,9 +164,9 @@ ImportNameList :: { [Name] }
   { $2 }
 
 NameList :: { [Name] }
-  : VarName
+  : Id
   { [$1] }
-  | NameList "," VarName
+  | NameList "," Id
   { $1 ++ [$3] }
 
 -- Fixity Declarations Statements
@@ -212,16 +212,10 @@ TypeSigDecl :: { [Decl] }
   { map (\ n -> TypeSigDecl $2 n (WithPredicates [$3] $5)) $1 }
 
 TypeSigNames :: { [Name] }
-  : TypeSigName
+  : VarName
   { [$1] }
-  | TypeSigNames "," TypeSigName
+  | TypeSigNames "," VarName
   { $1 ++ [$3] }
-
-TypeSigName :: { Name }
-  : VarId
-  { $1 }
-  | "(" VarSymId ")"
-  { $2 }
 
 Predicate :: { Predicate }
   : Type
@@ -232,18 +226,6 @@ Predicate :: { Predicate }
   { FailPredicate (Predicate Nothing $1) }
   | Type "=" Type "fails"
   { FailPredicate (Predicate (Just $1) $3) }
-  | SelPred "=" Type
-  { $1 $3 }
-  | SelPred "=" Type "fails"
-  { FailPredicate ($1 $3) }
-  | "(" Predicate ")"
-  { $2 }
-
-SelPred :: { Type -> Predicate }
-  : AtomicType "." Id
-  { SelectPredicate $1 $3 }
-  | "(" SelPred ")"
-  { $2 }
 
 -- Type Declarations
 
@@ -252,15 +234,13 @@ TypeDecl :: { Decl }
   { TypeDecl $1 $2 $4 }
 
 TypeLhs :: { Type }
-  : TypeParam consymid TypeParam
+  : TypeParam ConSymName TypeParam
   { TypeApp (TypeRef (startName $2)) [$1, $3] }
-  | TypeParam "`" conid "`" TypeParam
-  { TypeApp (TypeRef (startName $3)) [$1, $5] }
   | PreTypeLhs
   { $1 }
 
 PreTypeLhs :: { Type }
-  : conid
+  : ConName
   { TypeRef (startName $1) }
   | PreTypeLhs TypeParam
   { TypeApp $1 [$2] }
@@ -268,7 +248,7 @@ PreTypeLhs :: { Type }
   { $2 }
 
 TypeParam :: { Type }
-  : varid
+  : VarId
   { TypeRef (startName $1) }
   | "(" TypeParam ")"
   { $2 }
@@ -278,22 +258,22 @@ TypeParam :: { Type }
 -- Struct Decl
 
 StructDecl :: { Decl }
-  : "struct" conid "[" "]"
-  { StructDecl $1 (startName $2) Nothing [] [] }
-  | "struct" conid "[" "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) Nothing [] $6 }
-  | "struct" conid "[" StructRegions "]"
-  { StructDecl $1 (startName $2) Nothing $4 [] }
-  | "struct" conid "[" StructRegions "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) Nothing $4 $7 }
-  | "struct" conid "/" Type "[" "]"
-  { StructDecl $1 (startName $2) (Just $4) [] [] }
-  | "struct" conid "/" Type "[" "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) (Just $4) [] $8 }
-  | "struct" conid "/" Type "[" StructRegions "]"
-  { StructDecl $1 (startName $2) (Just $4) $6 [] }
-  | "struct" conid "/" Type "[" StructRegions "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) (Just $4) $6 $9 }
+  : "struct" ConName "[" "]"
+  { StructDecl $1 $2 Nothing [] [] }
+  | "struct" ConName "[" "]" "deriving" DeriveList
+  { StructDecl $1 $2 Nothing [] $6 }
+  | "struct" ConName "[" StructRegions "]"
+  { StructDecl $1 $2 Nothing $4 [] }
+  | "struct" ConName "[" StructRegions "]" "deriving" DeriveList
+  { StructDecl $1 $2 Nothing $4 $7 }
+  | "struct" ConName "/" Type "[" "]"
+  { StructDecl $1 $2 (Just $4) [] [] }
+  | "struct" ConName "/" Type "[" "]" "deriving" DeriveList
+  { StructDecl $1 $2 (Just $4) [] $8 }
+  | "struct" ConName "/" Type "[" StructRegions "]"
+  { StructDecl $1 $2 (Just $4) $6 [] }
+  | "struct" ConName "/" Type "[" StructRegions "]" "deriving" DeriveList
+  { StructDecl $1 $2 (Just $4) $6 $9 }
 
 StructRegions :: { [StructField] }
   : StructRegion
@@ -314,41 +294,41 @@ FieldNames :: { [(Name, Maybe Expr)] }
   { $1 ++ [$3] }
 
 FieldName :: { (Name, Maybe Expr) }
-  : varid
-  { (startName $1, Nothing) }
-  | varid "<-" Expr
-  { (startName $1, Just $3) }
+  : VarId
+  { ($1, Nothing) }
+  | VarId "<-" InfExpr
+  { ($1, Just $3) }
 
 DeriveList :: { [Name] }
-  : ModName
+  : ConName
   { [$1] }
   | "(" ModNameList ")"
   { $2 }
 
 ModNameList :: { [Name] }
-  : ModName
+  : ConName
   { [$1] }
-  | ModNameList "," ModName
+  | ModNameList "," ConName
   { $1 ++ [$3] }
 
 -- Bitdata Declarations
 BitdataDecl :: { Decl }
-  : "bitdata" conid
-  { BitdataDecl $1 (startName $2) Nothing [] [] }
-  | "bitdata" conid "deriving" DeriveList
-  { BitdataDecl $1 (startName $2) Nothing [] $4 }
-  | "bitdata" conid BitdataCons
-  { BitdataDecl $1 (startName $2) Nothing $3 [] }
-  | "bitdata" conid BitdataCons "deriving" DeriveList
-  { BitdataDecl $1 (startName $2) Nothing $3 $5 }
-  | "bitdata" conid "/" Type
-  { BitdataDecl $1 (startName $2) (Just $4) [] [] }
-  | "bitdata" conid "/" Type "deriving" DeriveList
-  { BitdataDecl $1 (startName $2) (Just $4) [] $6 }
-  | "bitdata" conid "/" Type BitdataCons
-  { BitdataDecl $1 (startName $2) (Just $4) $5 [] }
-  | "bitdata" conid "/" Type BitdataCons "deriving" DeriveList
-  { BitdataDecl $1 (startName $2) (Just $4) $5 $7 }
+  : "bitdata" ConName
+  { BitdataDecl $1 $2 Nothing [] [] }
+  | "bitdata" ConName "deriving" DeriveList
+  { BitdataDecl $1 $2 Nothing [] $4 }
+  | "bitdata" ConName BitdataCons
+  { BitdataDecl $1 $2 Nothing $3 [] }
+  | "bitdata" ConName BitdataCons "deriving" DeriveList
+  { BitdataDecl $1 $2 Nothing $3 $5 }
+  | "bitdata" ConName "/" Type
+  { BitdataDecl $1 $2 (Just $4) [] [] }
+  | "bitdata" ConName "/" Type "deriving" DeriveList
+  { BitdataDecl $1 $2 (Just $4) [] $6 }
+  | "bitdata" ConName "/" Type BitdataCons
+  { BitdataDecl $1 $2 (Just $4) $5 [] }
+  | "bitdata" ConName "/" Type BitdataCons "deriving" DeriveList
+  { BitdataDecl $1 $2 (Just $4) $5 $7 }
 
 BitdataCons :: { [(Name, [Either Expr (Name, Maybe Expr, Type)])] }
   : "=" BitdataCon
@@ -357,8 +337,8 @@ BitdataCons :: { [(Name, [Either Expr (Name, Maybe Expr, Type)])] }
   { $1 ++ [$3] }
 
 BitdataCon :: { (Name, [Either Expr (Name, Maybe Expr, Type)]) }
-  : conid "[" BitdataFields "]"
-  { (startName $1, $3) }
+  : ConName "[" BitdataFields "]"
+  { ($1, $3) }
 
 BitdataFields :: { [Either Expr (Name, Maybe Expr, Type)] }
   : BitdataField
@@ -367,10 +347,10 @@ BitdataFields :: { [Either Expr (Name, Maybe Expr, Type)] }
   { $1 ++ [$3] }
 
 BitdataField :: { Either Expr (Name, Maybe Expr, Type) }
-  : varid "::" Type
-  { Right (startName $1, Nothing, $3) }
-  | varid "=" Expr "::" Type
-  { Right (startName $1, Just $3, $5) }
+  : VarName "::" Type
+  { Right ($1, Nothing, $3) }
+  | VarName "=" InfExpr "::" Type
+  { Right ($1, Just $3, $5) }
   | AtomicExpr
   { Left $1 }
 
@@ -389,14 +369,10 @@ AreaVars :: { [(Name, Maybe Expr)] }
   { $1 ++ [$3] }
 
 AreaVar :: { (Name, Maybe Expr) }
-  : varid
-  { (startName $1, Nothing) }
-  | varid "<-" Expr
-  { (startName $1, Just $3) }
-  | "(" varsymid ")"
-  { (startName $2, Nothing) }
-  | "(" varsymid ")" "<-" Expr
-  { (startName $2, Just $5) }
+  : VarName
+  { ($1, Nothing) }
+  | VarName "<-" InfExpr
+  { ($1, Just $3) }
 
 -- Class Declarations
 
@@ -455,7 +431,7 @@ ListVar :: { [Name] }
 InstanceDecl :: { Decl }
   : "instance" Instance
   { InstanceDecl $1 [$2] }
-  | InstanceDecl "else" Instance
+  | InstanceDecl "else" Predicate
   { let InstanceDecl src xs = $1
     in InstanceDecl src (xs ++ [$3]) }
 
@@ -494,21 +470,21 @@ DataCons :: { [Type] }
 -- Equations
 
 Equation :: { [Decl] }
-  : VarId "=" Expr
+  : VarName "=" Expr
   { [EquationDecl $2 $1 [] Nothing $3] }
-  | VarId GuardEqRhs
+  | VarName GuardEqRhs
   { map (\f -> f $1 []) $2 }
-  | VarId PatList "=" Expr
+  | VarName PatList "=" Expr
   { [EquationDecl $3 $1 $2 Nothing $4] }
-  | VarId PatList GuardEqRhs
+  | VarName PatList GuardEqRhs
   { map (\f -> f $1 $2) $3 }
-  | VarId "=" Expr "where" DeclBlock
+  | VarName "=" Expr "where" DeclBlock
   { [LocalDecl $5 [EquationDecl $2 $1 [] Nothing $3]] }
-  | VarId GuardEqRhs "where" DeclBlock
+  | VarName GuardEqRhs "where" DeclBlock
   { [LocalDecl $4 (map (\f -> f $1 []) $2)] }
-  | VarId PatList "=" Expr "where" DeclBlock
+  | VarName PatList "=" Expr "where" DeclBlock
   { [LocalDecl $6 [EquationDecl $3 $1 $2 Nothing $4]] }
-  | VarId PatList GuardEqRhs "where" DeclBlock
+  | VarName PatList GuardEqRhs "where" DeclBlock
   { [LocalDecl $5 (map (\f -> f $1 $2) $3)] }
 
 GuardEqRhs :: { [Name -> [Pattern] -> Decl] }
@@ -577,74 +553,100 @@ PatFields :: { [(Name, Maybe Pattern)] }
 -- Expressions
 
 Expr :: { Expr }
-  : ComplexExpr
+  : ApplicExpr
+  { $1 }
+  | LetExpr
+  { $1 }
+  | IfExpr
+  { $1 }
+  | CaseExpr
   { $1 }
 
-ComplexExpr :: { Expr }
-  : InfixExpr
+ApplicExpr :: { Expr }
+  : "\\" PatList "->" Expr
+  { ExprLambda $2 $4 }
+  | "do" Block
+  { ExprDo $2 }
+  | InfExpr
   { $1 }
-  | "let" DeclBlock "in" Expr
+  | InfExpr "::" AppliedType
+  { ExprType $1 $3 }
+
+InfExpr :: { Expr }
+  : AppExpr
+  { $1 }
+  | InfExpr Op AppExpr
+  { ExprApply (ExprRef $2) [$1, $2] }
+
+AppExpr :: { Expr }
+  : AtomicExpr
+  { $1 }
+  | AppExpr AtomicExpr
+  { ExprApply $1 [$2] }
+
+LetExpr :: { Expr }
+  : "let" DeclBlock "in" Expr
   { ExprLet $2 $4 }
-  | "if" Expr "then" Expr "else" Expr
+
+IfExpr :: { Expr }
+  : "if" Expr "then" Expr "else" Expr
   { ExprIf $2 $4 $6 }
   | "if" "<-" Expr "then" Block "else" Block
   { ExprIfM $3 $5 $7 }
-  | "case" Expr "of" ExprAlts
+
+CaseExpr :: { Expr }
+  : "case" Expr "of" ExprAlts
   { ExprCase $2 $4 }
   | "case" "<-" Expr "of" BlockAlts
   { ExprCaseM $3 $5 }
-  | "do" Block
-  { ExprDo $2 }
-  | "\\" PatList "->" Expr
-  { ExprLambda $2 $4 }
 
-InfixExpr :: { Expr }
-  : InfixExpr VarSymId CallExpr
-  { ExprInfix $1 $2 $3 }
-  | InfixExpr "::" Type
-  { ExprType $1 $3 }
-  | CallExpr
-  { $1 }
-
-CallExpr :: { Expr }
-  : CallExpr RefExpr
-  { ExprApply $1 $2 }
-  | RefExpr
-  { $1 }
-
-RefExpr :: { Expr }
-  : RefExpr "." VarId
+AtomicExpr :: { Expr }
+  : VarName
+  { ExprRef $1 }
+  | ConName
+  { ExprRef $1 }
+  | Literal
+  { ExprConst $1 }
+  | AtomicExpr "." Id
   { ExprFldRef $1 $3 }
-  | RefExpr "[" Fields "]"
-  { ExprUpdate $1 $3 }
-  | RefExpr "[" StructFldInit "]"
-  { ExprBuild $1 $3 }
-  | AtomicExpr
-  { $1 }
+  | "(" Expr ")"
+  { $2 }
+  | "(" InfExpr Op ")"
+  { ExprApply (ExprRef $3) [$2] }
+  | "(" Op Expr ")"
+  { ExprApply (ExprRef $2) [$3] } -- FIXME
+  | "(" TupleExprCommas ")"
+  { ExprTuple $2 }
+  | AtomicExpr "[" FieldInits "]"
+  { $3 $1 }
+
+FieldInits :: { Expr -> Expr }
+  : Fields
+  { \ x -> ExprUpdate x $1 }
+  | StructFldInit
+  { \ x -> ExprBuild x $1 }
 
 Fields :: { [(Name, Maybe Expr)] }
-  : VarId
+  : VarName
   { [($1, Nothing)] }
-  | VarId "=" Expr
+  | VarName "=" Expr
   { [($1, Just $3)] }
-  | Fields "|" VarId
+  | Fields "|" VarName
   { $1 ++ [($3, Nothing)] }
-  | Fields "|" VarId "=" Expr
+  | Fields "|" VarName "=" Expr
   { $1 ++ [($3, Just $5)] }
+
+TupleExprCommas :: { [Expr] }
+  : Expr "," Expr
+  { [$1, $3] }
+  | TupleExprCommas "," Expr
+  { $1 ++ [$3] }
 
 StructFldInit :: { [(Name, Expr)] }
   : VarName "<-" Expr
   { [($1, $3)] }
   | StructFldInit "|" VarName "<-" Expr
   { $1 ++ [($3, $5)] }
-
-AtomicExpr :: { Expr }
-  : Literal
-  { ExprConst $1 }
-  | VarName
-  { ExprRef $1 }
-  | "(" Expr ")"
-  { $2 }
 
 Literal :: { ConstVal }
   : int
@@ -748,7 +750,7 @@ Statement :: { Statement }
 -- Types
 
 AtomicType :: { Type }
-  : ConName
+  : TyCon
   { TypeRef $1 }
   | VarId
   { TypeRef $1 }
@@ -762,6 +764,8 @@ AtomicType :: { Type }
   { $2 }
   | "(" Type "::" Kind ")"
   { TypeKind $2 $4 }
+  | "(" TupleTypeCommas ")"
+  { TypeTuple $2 }
 
 AppliedType :: { Type }
   : AtomicType
@@ -769,24 +773,17 @@ AppliedType :: { Type }
   | AppliedType AtomicType
   { TypeApp $1 [$2] }
 
-InfixType :: { Type }
+Type :: { Type }
   : AppliedType
   { $1 }
-  | InfixType ConSymName AppliedType
+  | Type TyOp AppliedType
   { TypeApp (TypeRef $2) [$1, $3] }
-
-Type :: { Type }
-  : InfixType
-  { $1 }
-  | "(" TupleTypeCommas ")"
-  { TypeTuple $2 }
 
 TupleTypeCommas :: { [Type] }
   : Type "," Type
   { [$1, $3] }
   | TupleTypeCommas "," Type
   { $1 ++ [$3] }
-
 
 -- Kinds
 
@@ -812,30 +809,6 @@ AtomicKind :: { Kind }
 
 --
 
-ModName :: { Name }
-  : conid
-  { startName $1 }
-  | ModName "." conid
-  { addName $1 $3 }
-
-VarSymId :: { Name }
-  : varsymid
-  { startName $1 }
-  | "*"
-  { Name $1 False [] "*" }
-  | "/"
-  { Name $1 False [] "/" }
-  | "`" VarId "`"
-  { $2 }
-
-ConSymId :: { Name }
-  : consymid
-  { startName $1 }
-  | ":#"
-  { Name $1 False [] ":#" }
-  | "->"
-  { Name $1 False [] "->" }
-
 VarId :: { Name }
   : varid
   { startName $1 }
@@ -850,39 +823,97 @@ VarId :: { Name }
   | "qualified"
   { Name $1 False [] "qualified" }
 
+VarSymId :: { Name }
+  : varsymid
+  { startName $1 }
+  | "*"
+  { Name $1 False [] "*" }
+  | "/"
+  { Name $1 False [] "/" }
+
+ConId :: { Name }
+  : conid
+  { startName $1 }
+
+ConSymId :: { Name }
+  : consymid
+  { startName $1 }
+  | ":#"
+  { Name $1 False [] ":#" }
+
 VarName :: { Name }
   : VarId
   { $1 }
   | "(" VarSymId ")"
   { $2 }
-  | "(" ConSymId ")"
-  { $2 }
-  | ModName "." VarId
-  { addName' $1 $3 }
-  | ModName "." "(" VarSymId ")"
-  { addName' $1 $4 }
-  | ModName "." "(" ConSymId ")"
-  { addName' $1 $4 }
+--  | ModName "." VarId
+--  { addName' $1 $3 }
+--  | ModName "." "(" VarSymId ")"
+--  { addName' $1 $4 }
+--  | ModName "." "(" ConSymId ")"
+--  { addName' $1 $4 }
 
 ConName :: { Name }
-  : ModName
+  : ConId
   { $1 }
-  | ModName "." "(" ConSymId ")"
-  { addName' $1 $4 }
+  | "(" ConSymId ")"
+  { $2 }
+--  : ModName
+--  { $1 }
+--  | ModName "." "(" ConSymId ")"
+--  { addName' $1 $4 }
+
+VarSymName :: { Name }
+  : VarSymId
+  { $1 }
+  | "`" VarName "`"
+  { $2 }
 
 ConSymName :: { Name }
   : ConSymId
   { $1 }
-  | ModName "." ConSymId
-  { addName' $1 $3 }
   | "`" ConName "`"
   { $2 }
 
 Id :: { Name }
-  : varid
+  : VarId
+  { $1 }
+  | ConId
+  { $1 }
+
+Op :: { Name }
+  : VarSymName
+  { $1 }
+  | ConSymName
+  { $1 }
+
+TyCon :: { Name }
+  : ConName
+  { $1 }
+  | "(" VarSymId ")"
+  { $2 }
+  | "(" "->" ")"
+  { startName $2 }
+
+TyConOp :: { Name }
+  : ConSymName
+  { $1 }
+  | VarSymId
+  { $1 }
+  | "->"
   { startName $1 }
-  | conid
-  { startName $1 }
+
+TyOp :: { Name }
+  : TyConOp
+  { $1 }
+  | "`" VarId "`"
+  { $2 }
+
+ModName :: { Name }
+  : ConId
+  { $1 }
+  | ModName "." ConId
+  { addName' $1 $3 }
 
 
 {
