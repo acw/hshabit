@@ -19,8 +19,12 @@ library
   ghc-options:         -Wall
   default-language:    Haskell2010
   exposed-modules:
+                       Syntax.IndentInfo,
+                       Syntax.IndentBlocks,
+                       Syntax.Lexeme,
                        Syntax.Parser,
-                       Syntax.Tokens
+                       Syntax.Posn,
+                       Syntax.Scanner
   build-depends:
                        array >= 0.5 && < 10000,
                        base >=4.7 && <4.8,
@@ -29,15 +33,20 @@ library
 
 executable hshabit
   main-is:             Main.hs
-  hs-source-dirs:      hs-src
+  hs-source-dirs:      hs-bin-src
+  other-modules:
+                       System.ParseArgs
   ghc-options:         -Wall
   default-language:    Haskell2010
   build-depends:
+                       ansi-wl-pprint >= 0.6.7.1 && < 10000,
                        array >= 0.5 && < 10000,
                        base >=4.7 && <4.8,
                        bytestring >=0.10 && <0.11,
                        Cabal >=1.18 && <1.19,
-                       hshabit >= 0 && < 10000
+                       filepath >= 1.3.0.2 && < 10000,
+                       hshabit >= 0 && < 10000,
+                       optparse-applicative >= 0.8.0.1 && < 10000
 
 test-suite hshabit-tests
   main-is:             Test.hs

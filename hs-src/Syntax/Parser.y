@@ -1,16 +1,15 @@
 --  vim:set filetype=haskell:
 {
-module Syntax.Parser(parseHabit) where
+module Syntax.Parser(parseHabit, HabitModule) where
 
 import Data.ByteString.Lazy(ByteString,unpack)
 import Data.Char(chr)
-import Syntax.Tokens
+import Syntax.Lexeme
+import Syntax.Posn
 
 }
 
 %name parseHabit
-%monad { Alex }
-%lexer { tokenize } { EOF }
 
 %tokentype { Lexeme }
 %token
@@ -43,29 +42,29 @@ import Syntax.Tokens
   "type"        { ReservedId $$ "type" }
   "where"       { ReservedId $$ "where" }
 
-  "("           { ReservedSym $$ "(" _ }
-  ")"           { ReservedSym $$ ")" _ }
-  "|"           { ReservedSym $$ "|" _ }
-  "="           { ReservedSym $$ "=" _ }
-  ","           { ReservedSym $$ "," _ }
-  "`"           { ReservedSym $$ "`" _ }
-  "{"           { ReservedSym $$ "{" _ }
-  ";"           { ReservedSym $$ ";" _ }
-  "}"           { ReservedSym $$ "}" _ }
-  "["           { ReservedSym $$ "[" _ }
-  "]"           { ReservedSym $$ "]" _ }
-  "\\"          { ReservedSym $$ "\\" _ }
-  "<-"          { ReservedSym $$ "<-" _ }
-  "->"          { ReservedSym $$ "->" _ }
-  "=>"          { ReservedSym $$ "=>" _ }
-  "::"          { ReservedSym $$ "::" _ }
-  "#."          { ReservedSym $$ "#." _ }
-  "@"           { ReservedSym $$ "@" _ }
-  "_"           { ReservedSym $$ "_" _ }
-  "."           { ReservedSym $$ "." _ }
-  "*"           { ReservedSym $$ "*" _ }
-  "/"           { ReservedSym $$ "/" _ }
-  ":#"          { ReservedSym $$ ":#" _ }
+  "("           { ReservedSym $$ "("  }
+  ")"           { ReservedSym $$ ")"  }
+  "|"           { ReservedSym $$ "|"  }
+  "="           { ReservedSym $$ "="  }
+  ","           { ReservedSym $$ ","  }
+  "`"           { ReservedSym $$ "`"  }
+  "{"           { ReservedSym $$ "{"  }
+  ";"           { ReservedSym $$ ";"  }
+  "}"           { ReservedSym $$ "}"  }
+  "["           { ReservedSym $$ "["  }
+  "]"           { ReservedSym $$ "]"  }
+  "\\"          { ReservedSym $$ "\\" }
+  "<-"          { ReservedSym $$ "<-" }
+  "->"          { ReservedSym $$ "->" }
+  "=>"          { ReservedSym $$ "=>" }
+  "::"          { ReservedSym $$ "::" }
+  "#."          { ReservedSym $$ "#." }
+  "@"           { ReservedSym $$ "@"  }
+  "_"           { ReservedSym $$ "_"  }
+  "."           { ReservedSym $$ "."  }
+  "*"           { ReservedSym $$ "*"  }
+  "/"           { ReservedSym $$ "/"  }
+  ":#"          { ReservedSym $$ ":#" }
 
   varid         { VarId _ _ }
   conid         { ConId _ _ }
@@ -235,13 +234,13 @@ TypeDecl :: { Decl }
 
 TypeLhs :: { Type }
   : TypeParam ConSymName TypeParam
-  { TypeApp (TypeRef (startName $2)) [$1, $3] }
+  { TypeApp (TypeRef $2) [$1, $3] }
   | PreTypeLhs
   { $1 }
 
 PreTypeLhs :: { Type }
   : ConName
-  { TypeRef (startName $1) }
+  { TypeRef $1 }
   | PreTypeLhs TypeParam
   { TypeApp $1 [$2] }
   | "(" TypeLhs ")"
@@ -249,7 +248,7 @@ PreTypeLhs :: { Type }
 
 TypeParam :: { Type }
   : VarId
-  { TypeRef (startName $1) }
+  { TypeRef $1 }
   | "(" TypeParam ")"
   { $2 }
   | "(" TypeParam "::" Kind ")"
@@ -431,7 +430,7 @@ ListVar :: { [Name] }
 InstanceDecl :: { Decl }
   : "instance" Instance
   { InstanceDecl $1 [$2] }
-  | InstanceDecl "else" Predicate
+  | InstanceDecl "else" Instance
   { let InstanceDecl src xs = $1
     in InstanceDecl src (xs ++ [$3]) }
 
@@ -576,7 +575,7 @@ InfExpr :: { Expr }
   : AppExpr
   { $1 }
   | InfExpr Op AppExpr
-  { ExprApply (ExprRef $2) [$1, $2] }
+  { ExprApply (ExprRef $2) [$1, $3] }
 
 AppExpr :: { Expr }
   : AtomicExpr
@@ -893,7 +892,7 @@ TyCon :: { Name }
   | "(" VarSymId ")"
   { $2 }
   | "(" "->" ")"
-  { startName $2 }
+  { Name $2 False [] "->" }
 
 TyConOp :: { Name }
   : ConSymName
@@ -901,7 +900,7 @@ TyConOp :: { Name }
   | VarSymId
   { $1 }
   | "->"
-  { startName $1 }
+  { Name $1 False [] "->" }
 
 TyOp :: { Name }
   : TyConOp
@@ -921,17 +920,17 @@ ModName :: { Name }
 data HabitModule = HabitModule Name [Decl]
  deriving (Show)
 
-data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
-                 | FixityDecl AlexPosn FixityType Bool (Maybe Integer) [Name]
-                 | TypeSigDecl AlexPosn Name Type
-                 | TypeDecl AlexPosn Type Type
-                 | StructDecl AlexPosn Name (Maybe Type) [StructField] [Name]
-                 | BitdataDecl AlexPosn Name (Maybe Type) [BitdataField] [Name]
-                 | AreaDecl AlexPosn Name (Maybe Expr) Type
-                 | ClassDecl AlexPosn Type (Maybe Type) [Constraint] [Decl]
-                 | InstanceDecl AlexPosn [Instance]
-                 | DataDecl AlexPosn Type [Type] [Name] [Constraint]
-                 | EquationDecl AlexPosn Name [Pattern] (Maybe Expr) Expr
+data Decl        = ImportDecl Posn Bool Name (Maybe Name) ImportMods
+                 | FixityDecl Posn FixityType Bool (Maybe Integer) [Name]
+                 | TypeSigDecl Posn Name Type
+                 | TypeDecl Posn Type Type
+                 | StructDecl Posn Name (Maybe Type) [StructField] [Name]
+                 | BitdataDecl Posn Name (Maybe Type) [BitdataField] [Name]
+                 | AreaDecl Posn Name (Maybe Expr) Type
+                 | ClassDecl Posn Type (Maybe Type) [Constraint] [Decl]
+                 | InstanceDecl Posn [Instance]
+                 | DataDecl Posn Type [Type] [Name] [Constraint]
+                 | EquationDecl Posn Name [Pattern] (Maybe Expr) Expr
                  | LocalDecl [Decl] [Decl]
  deriving (Show)
 
@@ -954,6 +953,7 @@ type StructField = (Maybe Name, Maybe Expr, Type)
 type BitdataField = (Name, [Either Expr (Name, Maybe Expr, Type)])
 
 data Expr = ExprConst ConstVal
+          | ExprTuple [Expr]
           | ExprRef Name
           | ExprLet [Decl] Expr
           | ExprIf Expr Expr Expr
@@ -964,7 +964,7 @@ data Expr = ExprConst ConstVal
           | ExprLambda [Pattern] Expr
           | ExprType Expr Type
           | ExprInfix Expr Name Expr
-          | ExprApply Expr Expr
+          | ExprApply Expr [Expr]
           | ExprFldRef Expr Name
           | ExprUpdate Expr [(Name, Maybe Expr)]
           | ExprBuild Expr [(Name, Expr)]
@@ -1010,12 +1010,12 @@ data Kind = KindStar | KindType | KindNat | KindArea | KindLabel
           | KindFun Kind Kind
   deriving (Show)
 
-data ConstVal = ConstInt AlexPosn Integer Int
-              | ConstVec AlexPosn Integer Int Int
-              | ConstFloat AlexPosn Float
-              | ConstDouble AlexPosn Double
-              | ConstUnit AlexPosn
-              | ConstLabel AlexPosn Name
+data ConstVal = ConstInt Posn Integer Int
+              | ConstVec Posn Integer Int Int
+              | ConstFloat Posn Float
+              | ConstDouble Posn Double
+              | ConstUnit Posn
+              | ConstLabel Posn Name
   deriving (Show)
 
 translateConst :: Lexeme -> ConstVal
@@ -1030,20 +1030,20 @@ data Predicate = Predicate (Maybe Type) Type
                | FailPredicate Predicate
   deriving (Show)
 
-data Name       = Name AlexPosn Bool [String] String
+data Name       = Name Posn Bool [String] String
  deriving (Show)
 
 defaultMod :: Name
-defaultMod = Name nopos True [] "Main"
+defaultMod = Name EmptyPosn True [] "Main"
 
 startName :: Lexeme -> Name
-startName (ReservedId p x)    = Name p False [] x
-startName (ReservedSym p x m) = Name p m [] x
-startName (VarId p bs)        = Name p False [] (fromBS bs)
-startName (ConId p bs)        = Name p False [] (fromBS bs)
-startName (VarSymId p bs)     = Name p False [] (fromBS bs)
-startName (ConSymId p bs)     = Name p False [] (fromBS bs)
-startName x                   = error ("Bad token for startName: " ++ show x)
+startName (ReservedId p x)  = Name p False [] x
+startName (ReservedSym p x) = Name p (isEmptyPosn p) [] x
+startName (VarId p bs)      = Name p False [] (fromBS bs)
+startName (ConId p bs)      = Name p False [] (fromBS bs)
+startName (VarSymId p bs)   = Name p False [] (fromBS bs)
+startName (ConSymId p bs)   = Name p False [] (fromBS bs)
+startName x                 = error ("Bad token for startName: " ++ show x)
 
 addName :: Name -> Lexeme -> Name
 addName (Name p m ls x) t = Name p m (ls ++ [x]) y
@@ -1053,11 +1053,12 @@ addName' :: Name -> Name -> Name
 addName' (Name p1 m1 ls1 x1) (Name _ m2 ls2 x2) =
   Name p1 (m1 && m2) (ls1 ++ [x1] ++ ls2) x2
 
-happyError :: Alex a
-happyError = fail "Parse Failed"
-
 fromBS :: ByteString -> String
 fromBS = map (chr . fromIntegral) . unpack
+
+happyError :: [Lexeme] -> a
+happyError []    = error "Parse error at end of file!"
+happyError (x:_) = error ("Parse error around " ++ show (getPosn x))
 
 }
 

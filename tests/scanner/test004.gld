@@ -1,0 +1,13 @@
+lexeme:<tests/lexer/test004.hbt:1:1>:Float:0.0f
+lexeme:<tests/lexer/test004.hbt:2:1>:Float:1.1e-2f
+lexeme:<tests/lexer/test004.hbt:3:1>:Float:1100.0f
+lexeme:<tests/lexer/test004.hbt:4:1>:Float:1.1e-7f
+lexeme:<tests/lexer/test004.hbt:5:1>:Float:1.1e-2f
+lexeme:<tests/lexer/test004.hbt:6:1>:Float:1.1e-2f
+lexeme:<tests/lexer/test004.hbt:7:1>:Float:1.1e-2d
+lexeme:<tests/lexer/test004.hbt:8:1>:Float:1.1e-2d
+lexeme:<tests/lexer/test004.hbt:9:1>:Float:1100.0f
+lexeme:<tests/lexer/test004.hbt:10:1>:Float:1.1e-95d
+lexeme:<tests/lexer/test004.hbt:11:1>:Float:1.2092e16f
+lexeme:<tests/lexer/test004.hbt:12:1>:Float:1.2092e-8f
+lexeme:EOF

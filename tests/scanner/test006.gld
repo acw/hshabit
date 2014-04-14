@@ -1,0 +1,10 @@
+lexeme:<tests/lexer/test006.hbt:1:1>:VarSymId:+
+lexeme:<tests/lexer/test006.hbt:2:1>:VarSymId:-
+lexeme:<tests/lexer/test006.hbt:3:1>:VarSymId:**
+lexeme:<tests/lexer/test006.hbt:4:1>:VarSymId:<$>
+lexeme:<tests/lexer/test006.hbt:5:1>:VarSymId:<**>
+lexeme:<tests/lexer/test006.hbt:6:1>:ConSymId::+:
+lexeme:<tests/lexer/test006.hbt:7:1>:ConSymId::#:
+lexeme:<tests/lexer/test006.hbt:8:1>:ConSymId::$:
+lexeme:<tests/lexer/test006.hbt:9:1>:ConSymId::<$>
+lexeme:EOF

@@ -1,1 +1,1 @@
-(:#) :: (n + m = p) => Bit m -> Bit n -> Bit p
+(+++) :: (n + m = p) => Bit m -> Bit n -> Bit p
