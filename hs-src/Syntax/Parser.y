@@ -1,9 +1,11 @@
 --  vim:set filetype=haskell:
 {
-module Syntax.Parser(parseHabit, HabitModule) where
+module Syntax.Parser(parse, HabitModule) where
 
 import Data.ByteString.Lazy(ByteString,unpack)
 import Data.Char(chr)
+import Prelude hiding (lex)
+import Syntax.IndentBlocks
 import Syntax.Lexeme
 import Syntax.Posn
 
@@ -70,6 +72,10 @@ import Syntax.Posn
   conid         { ConId _ _ }
   varsymid      { VarSymId _ _ }
   consymid      { ConSymId _ _ }
+  qvarid        { QVarId _ _ }
+  qconid        { QConId _ _ }
+  qvarsymid     { QVarSymId _ _ }
+  qconsymid     { QConSymId _ _ }
   int           { IntConst _ _ _ }
   vec           { VecConst _ _ _ _ }
   float         { FloatConst _ _ }
@@ -80,7 +86,11 @@ import Syntax.Posn
 Habit :: { HabitModule }
   : "{" Prog "}"
   { HabitModule defaultMod $2 }
+  | "{" Prog ";" "}"
+  { HabitModule defaultMod $2 }
   | "module" ModName "where" "{" Prog "}"
+  { HabitModule $2 $5 }
+  | "module" ModName "where" "{" Prog ";" "}"
   { HabitModule $2 $5 }
 
 Prog :: { [Decl] }
@@ -191,15 +201,15 @@ Prec :: { Maybe Integer }
   { let IntConst _ v _ = $1 in Just v }
 
 CommaOpList :: { [Name] }
-  : VarSymId
+  : QVarSymName
   { [$1] }
-  | CommaOpList "," VarSymId
+  | CommaOpList "," QVarSymName
   { $1 ++ [$3] }
 
 CommaTyopList :: { [Name] }
-  : ConSymId
+  : TyOp
   { [$1] }
-  | CommaTyopList "," ConSymId
+  | CommaTyopList "," TyOp
   { $1 ++ [$3] }
 
 -- Type Signatures
@@ -221,10 +231,12 @@ Predicate :: { Predicate }
   { Predicate Nothing $1 }
   | Type "=" Type
   { Predicate (Just $1) $3 }
-  | Type "fails"
-  { FailPredicate (Predicate Nothing $1) }
-  | Type "=" Type "fails"
-  { FailPredicate (Predicate (Just $1) $3) }
+  | Predicate "fails"
+  { FailPredicate $1 }
+  | "(" Type "=" Type ")"
+  { Predicate (Just $2) $4 }
+  | "(" Predicate "fails" ")"
+  { FailPredicate $2 }
 
 -- Type Declarations
 
@@ -301,13 +313,13 @@ FieldName :: { (Name, Maybe Expr) }
 DeriveList :: { [Name] }
   : ConName
   { [$1] }
-  | "(" ModNameList ")"
+  | "(" ConNameList ")"
   { $2 }
 
-ModNameList :: { [Name] }
+ConNameList :: { [Name] }
   : ConName
   { [$1] }
-  | ModNameList "," ConName
+  | ConNameList "," ConName
   { $1 ++ [$3] }
 
 -- Bitdata Declarations
@@ -600,9 +612,9 @@ CaseExpr :: { Expr }
   { ExprCaseM $3 $5 }
 
 AtomicExpr :: { Expr }
-  : VarName
+  : QVarName
   { ExprRef $1 }
-  | ConName
+  | QConName
   { ExprRef $1 }
   | Literal
   { ExprConst $1 }
@@ -822,6 +834,12 @@ VarId :: { Name }
   | "qualified"
   { Name $1 False [] "qualified" }
 
+QVarId :: { Name }
+  : VarId
+  { $1 }
+  | qvarid
+  { startName $1 }
+
 VarSymId :: { Name }
   : varsymid
   { startName $1 }
@@ -829,6 +847,12 @@ VarSymId :: { Name }
   { Name $1 False [] "*" }
   | "/"
   { Name $1 False [] "/" }
+
+QVarSymId :: { Name }
+  : VarSymId
+  { $1 }
+  | qvarsymid
+  { startName $1 }
 
 ConId :: { Name }
   : conid
@@ -845,22 +869,24 @@ VarName :: { Name }
   { $1 }
   | "(" VarSymId ")"
   { $2 }
---  | ModName "." VarId
---  { addName' $1 $3 }
---  | ModName "." "(" VarSymId ")"
---  { addName' $1 $4 }
---  | ModName "." "(" ConSymId ")"
---  { addName' $1 $4 }
+
+QVarName :: { Name }
+  : VarName
+  { $1 }
+  | qvarid
+  { startName $1 }
 
 ConName :: { Name }
   : ConId
   { $1 }
   | "(" ConSymId ")"
   { $2 }
---  : ModName
---  { $1 }
---  | ModName "." "(" ConSymId ")"
---  { addName' $1 $4 }
+
+QConName :: { Name }
+  : ConName
+  { $1 }
+  | qconid
+  { startName $1 }
 
 VarSymName :: { Name }
   : VarSymId
@@ -868,11 +894,23 @@ VarSymName :: { Name }
   | "`" VarName "`"
   { $2 }
 
+QVarSymName :: { Name }
+  : QVarSymId
+  { $1 }
+  | "`" QVarName "`"
+  { $2 }
+
 ConSymName :: { Name }
   : ConSymId
   { $1 }
   | "`" ConName "`"
   { $2 }
+
+QConSymName :: { Name }
+  : ConSymName
+  { $1 }
+  | qconsymid
+  { startName $1 }
 
 Id :: { Name }
   : VarId
@@ -887,17 +925,17 @@ Op :: { Name }
   { $1 }
 
 TyCon :: { Name }
-  : ConName
+  : QConName
   { $1 }
-  | "(" VarSymId ")"
+  | "(" QVarSymId ")"
   { $2 }
   | "(" "->" ")"
   { Name $2 False [] "->" }
 
 TyConOp :: { Name }
-  : ConSymName
+  : QConSymName
   { $1 }
-  | VarSymId
+  | QVarSymId
   { $1 }
   | "->"
   { Name $1 False [] "->" }
@@ -905,14 +943,14 @@ TyConOp :: { Name }
 TyOp :: { Name }
   : TyConOp
   { $1 }
-  | "`" VarId "`"
+  | "`" QVarId "`"
   { $2 }
 
 ModName :: { Name }
   : ConId
   { $1 }
-  | ModName "." ConId
-  { addName' $1 $3 }
+  | qconid
+  { startName $1 }
 
 
 {
@@ -1041,8 +1079,12 @@ startName (ReservedId p x)  = Name p False [] x
 startName (ReservedSym p x) = Name p (isEmptyPosn p) [] x
 startName (VarId p bs)      = Name p False [] (fromBS bs)
 startName (ConId p bs)      = Name p False [] (fromBS bs)
+startName (QVarId p bs)     = Name p False [] (fromBS bs)
+startName (QConId p bs)     = Name p False [] (fromBS bs)
 startName (VarSymId p bs)   = Name p False [] (fromBS bs)
 startName (ConSymId p bs)   = Name p False [] (fromBS bs)
+startName (QVarSymId p bs)  = Name p False [] (fromBS bs)
+startName (QConSymId p bs)  = Name p False [] (fromBS bs)
 startName x                 = error ("Bad token for startName: " ++ show x)
 
 addName :: Name -> Lexeme -> Name
@@ -1059,6 +1101,9 @@ fromBS = map (chr . fromIntegral) . unpack
 happyError :: [Lexeme] -> a
 happyError []    = error "Parse error at end of file!"
 happyError (x:_) = error ("Parse error around " ++ show (getPosn x))
+
+parse :: Maybe FilePath -> ByteString -> HabitModule
+parse source bytes = parseHabit (lex source bytes)
 
 }
 

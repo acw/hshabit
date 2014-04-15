@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [DataDecl (AlexPn 0 1 1) (TypeRef (Name (AlexPn 5 1 6) False [] "Foo")) [] [] []]
+HabitModule (Name <-> True [] "Main") [DataDecl <test085.hbt:1:1> (TypeRef (Name <test085.hbt:1:6> False [] "Foo")) [] [] []]

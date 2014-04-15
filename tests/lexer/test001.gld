@@ -1,0 +1,13 @@
+lexeme:<test001.hbt:1:1>:RId:module
+lexeme:<test001.hbt:1:8>:ConId:Foo
+lexeme:<test001.hbt:1:12>:RId:where
+lexeme:<->:RSym:{
+lexeme:<test001.hbt:3:1>:VarId:foo
+lexeme:<test001.hbt:3:5>:RSym:::
+lexeme:<test001.hbt:3:8>:ConId:Int
+lexeme:<->:RSym:;
+lexeme:<test001.hbt:4:1>:VarId:foo
+lexeme:<test001.hbt:4:5>:RSym:=
+lexeme:<test001.hbt:4:7>:Int:base10:1
+lexeme:<->:RSym:;
+lexeme:<->:RSym:}

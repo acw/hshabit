@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [BitdataDecl (AlexPn 0 1 1) (Name (AlexPn 8 1 9) False [] "Foo") Nothing [] []]
+HabitModule (Name <-> True [] "Main") [BitdataDecl <test059.hbt:1:1> (Name <test059.hbt:1:9> False [] "Foo") Nothing [] []]

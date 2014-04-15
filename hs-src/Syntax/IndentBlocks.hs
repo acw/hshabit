@@ -19,9 +19,7 @@ indentBlocks ils = ell ils []
     | (m == n) && forbidSemi ts = ell ts (m : ms)
     | (m == n)                  = injectedSemi : ell ts (m : ms)
     | n < m                     = injectedClose : ell (IndentMarkA n : ts) ms
-    | otherwise                 = ell ts (m : ms)
-  ell (IndentMarkA _ : _) _
-    = error "INTERNAL ERROR: Invalid IndentMarkA reached"
+  ell (IndentMarkA _ : ts) ms   = ell ts ms
   --
   ell (IndentMarkB n : ts) (m : ms)
     | n > m = injectedOpen : ell ts (n : (m : ms))

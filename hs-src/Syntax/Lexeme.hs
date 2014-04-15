@@ -9,8 +9,12 @@ data Lexeme = ReservedId  Posn String
             | ReservedSym Posn String
             | VarId       Posn ByteString
             | ConId       Posn ByteString
+            | QVarId      Posn ByteString
+            | QConId      Posn ByteString
             | VarSymId    Posn ByteString
             | ConSymId    Posn ByteString
+            | QVarSymId   Posn ByteString
+            | QConSymId   Posn ByteString
             | IntConst    Posn Integer    Int
             | VecConst    Posn Integer    Int Int
             | FloatConst  Posn FloatVal
@@ -25,9 +29,17 @@ instance Show Lexeme where
                                 map (chr . fromIntegral) (unpack bs)
   show (ConId       p bs)     = "lexeme:" ++ show p ++ ":" ++ "ConId:" ++
                                 map (chr . fromIntegral) (unpack bs)
+  show (QVarId      p bs)     = "lexeme:" ++ show p ++ ":" ++ "QVarId:" ++
+                                map (chr . fromIntegral) (unpack bs)
+  show (QConId      p bs)     = "lexeme:" ++ show p ++ ":" ++ "QConId:" ++
+                                map (chr . fromIntegral) (unpack bs)
   show (VarSymId    p bs)     = "lexeme:" ++ show p ++ ":" ++ "VarSymId:" ++
                                 map (chr . fromIntegral) (unpack bs)
   show (ConSymId    p bs)     = "lexeme:" ++ show p ++ ":" ++ "ConSymId:" ++
+                                map (chr . fromIntegral) (unpack bs)
+  show (QVarSymId    p bs)    = "lexeme:" ++ show p ++ ":" ++ "QVarSymId:" ++
+                                map (chr . fromIntegral) (unpack bs)
+  show (QConSymId    p bs)    = "lexeme:" ++ show p ++ ":" ++ "QConSymId:" ++
                                 map (chr . fromIntegral) (unpack bs)
   show (IntConst    p vl b)   = "lexeme:" ++ show p ++ ":Int:base" ++ show b ++
                                 ":" ++ show vl
@@ -45,8 +57,12 @@ getPosn (ReservedId  p _  )   = p
 getPosn (ReservedSym p _  )   = p
 getPosn (VarId       p _  )   = p
 getPosn (ConId       p _  )   = p
+getPosn (QVarId      p _  )   = p
+getPosn (QConId      p _  )   = p
 getPosn (VarSymId    p _  )   = p
 getPosn (ConSymId    p _  )   = p
+getPosn (QVarSymId   p _  )   = p
+getPosn (QConSymId   p _  )   = p
 getPosn (IntConst    p _ _)   = p
 getPosn (VecConst    p _ _ _) = p
 getPosn (FloatConst  p _  )   = p

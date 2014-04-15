@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [FixityDecl (AlexPn 0 1 1) FixityLeft False (Just 7) [Name (AlexPn 9 1 10) False [] "*"]]
+HabitModule (Name <-> True [] "Main") [FixityDecl <test020.hbt:1:1> FixityLeft False (Just 7) [Name <test020.hbt:1:10> False [] "*"]]

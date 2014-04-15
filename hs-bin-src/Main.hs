@@ -5,6 +5,7 @@ import Data.List(intercalate)
 import Prelude hiding (lex)
 import Syntax.IndentBlocks(lex)
 import Syntax.IndentInfo(addIndentInfo)
+import Syntax.Parser(parse)
 import Syntax.Scanner(scan)
 import System.FilePath(takeFileName)
 import System.IO
@@ -17,10 +18,12 @@ main = parseCommandLine >>= runHSHabit
 runHSHabit :: Command -> IO ()
 runHSHabit Help           = displayIO stderr habitHelp
 runHSHabit Version        = hPutStrLn stderr "The High Speed Habit Compiler, Version 0.1"
-runHSHabit c@Lexer{}
+runHSHabit c@Lex{}
   | lexEmitIndentBlocks c = runCompiler c lex
-  | lexAddIndentInfo c    = runCompiler c (\ a b -> addIndentInfo (scan a b))
+  | lexAddIndentInfo c    = runCompiler c (addIndentInfo .+. scan)
   | otherwise             = runCompiler c scan
+runHSHabit c@Parse{}
+                          = runCompiler c ((:[]) .+. parse)
 
 runCompiler :: Show a =>
                Command ->
@@ -38,4 +41,7 @@ runCompiler cmd compiler =
 withOutputFile :: FilePath -> (Handle -> IO ()) -> IO ()
 withOutputFile "" action = action stdout
 withOutputFile f  action = withFile f WriteMode action
+
+(.+.) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+f .+. g = \ a b -> f (g a b)
 

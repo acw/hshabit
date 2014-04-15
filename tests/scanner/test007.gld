@@ -1,0 +1,8 @@
+lexeme:<test007.hbt:1:1>:QConId:Data.List
+lexeme:<test007.hbt:2:1>:QConId:Data.Foo.Bar.Goo
+lexeme:<test007.hbt:3:1>:QConId:Data.Foo
+lexeme:<test007.hbt:3:9>:RSym:.
+lexeme:<test007.hbt:4:1>:QVarId:Data.List.uncons
+lexeme:<test007.hbt:5:1>:QVarSymId:Data.List.++
+lexeme:<test007.hbt:6:1>:QConSymId:Data.List.:
+lexeme:EOF

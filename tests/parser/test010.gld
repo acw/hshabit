@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [ImportDecl (AlexPn 0 1 1) True (Name (AlexPn 17 1 18) False ["Data"] "List") (Just (Name (AlexPn 30 1 31) False [] "List")) NoMods]
+HabitModule (Name <-> True [] "Main") [ImportDecl <test010.hbt:1:1> True (Name <test010.hbt:1:18> False [] "Data.List") (Just (Name <test010.hbt:1:31> False [] "List")) NoMods]

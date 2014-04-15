@@ -1,7 +1,6 @@
 module Syntax.IndentInfo(IndentedLexeme(..), addIndentInfo)
   where
 
-import Debug.Trace
 import Syntax.Lexeme
 import Syntax.Posn
 

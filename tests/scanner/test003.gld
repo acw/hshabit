@@ -1,4 +1,4 @@
-lexeme:<tests/lexer/test003.hbt:1:1>:Vec:base2len8:106
-lexeme:<tests/lexer/test003.hbt:2:1>:Vec:base8len21:116956
-lexeme:<tests/lexer/test003.hbt:3:1>:Vec:base16len32:3735928559
+lexeme:<test003.hbt:1:1>:Vec:base2len8:106
+lexeme:<test003.hbt:2:1>:Vec:base8len21:116956
+lexeme:<test003.hbt:3:1>:Vec:base16len32:3735928559
 lexeme:EOF

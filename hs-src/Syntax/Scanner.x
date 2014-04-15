@@ -30,6 +30,11 @@ $nocsym       = $sym # [:]
 
 $whitechar    = [ \t\n\r\f\v]
 
+@varid        = $small $idchar*
+@conid        = $large $idchar*
+
+@qual         = (@conid \.)+
+
 habit :-
 
 <0> $white+                                                     { skip }
@@ -64,10 +69,14 @@ habit :-
 <0> $decdigit+ \. $decdigit+ ([eE] [\-\+]? $decdigit+)? [fFdD]? { mkFloatConst }
 <0> $decdigit+               ([eE] [\-\+]? $decdigit+)? [fFdD]? { mkFloatConst }
 
-<0> $small $idchar*                                             { mkVarId }
-<0> $large $idchar*                                             { mkConId }
+<0> @varid                                                      { mkVarId }
+<0> @conid                                                      { mkConId }
+<0> @qual @varid                                                { mkQVarId }
+<0> @qual @conid                                                { mkQConId }
 <0> $nocsym $sym*                                               { mkVarSymId }
 <0> ":" $sym*                                                   { mkConSymId }
+<0> @qual $nocsym $sym*                                         { mkQVarSymId }
+<0> @qual ":" $sym*                                             { mkQConSymId }
 
 {
 
@@ -173,11 +182,17 @@ mkOctVecConst = yankAndFill (\ a (v,l) -> VecConst a v 8  l) (parseVec 8)
 mkDecVecConst = yankAndFill (\ a (v,l) -> VecConst a v 10 l) (parseVec 10)
 mkHexVecConst = yankAndFill (\ a (v,l) -> VecConst a v 16 l) (parseVec 16)
 
-mkVarId, mkConId, mkVarSymId, mkConSymId :: AlexAction
+mkVarId, mkConId, mkQVarId, mkQConId :: AlexAction
 mkVarId    = yankAndFill VarId    id
 mkConId    = yankAndFill ConId    id
-mkVarSymId = yankAndFill VarSymId id
-mkConSymId = yankAndFill ConSymId id
+mkQVarId   = yankAndFill QVarId   id
+mkQConId   = yankAndFill QConId   id
+
+mkVarSymId, mkConSymId, mkQVarSymId, mkQConSymId :: AlexAction
+mkVarSymId = yankAndFill  VarSymId  id
+mkConSymId = yankAndFill  ConSymId  id
+mkQVarSymId = yankAndFill QVarSymId id
+mkQConSymId = yankAndFill QConSymId id
 
 mkFloatConst :: AlexAction
 mkFloatConst (AlexPn _ l c) bstr = do

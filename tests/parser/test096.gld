@@ -1,0 +1,1 @@
+HabitModule (Name <-> True [] "Main") [LocalDecl [EquationDecl <test096.hbt:1:15> (Name <test096.hbt:1:13> False [] "y") [] Nothing (ExprConst (ConstInt <test096.hbt:1:17> 6 10))] [EquationDecl <test096.hbt:1:3> (Name <test096.hbt:1:1> False [] "x") [] Nothing (ExprRef (Name <test096.hbt:1:5> False [] "y"))]]

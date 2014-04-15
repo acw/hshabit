@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [ClassDecl (AlexPn 0 1 1) (TypeApp (TypeRef (Name (AlexPn 9 1 10) False [] "Cons")) [TypeRef (Name (AlexPn 6 1 7) False [] "a"),TypeRef (Name (AlexPn 15 1 16) False [] "b")]) Nothing [] []]
+HabitModule (Name <-> True [] "Main") [ClassDecl <test073.hbt:1:1> (TypeApp (TypeRef (Name <test073.hbt:1:10> False [] "Cons")) [TypeRef (Name <test073.hbt:1:7> False [] "a"),TypeRef (Name <test073.hbt:1:16> False [] "b")]) Nothing [] []]

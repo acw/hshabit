@@ -1,1 +1,1 @@
-HabitModule (Name (AlexPn (-9223372036854775808) (-9223372036854775808) (-9223372036854775808)) True [] "Main") [StructDecl (AlexPn 0 1 1) (Name (AlexPn 7 1 8) False [] "S") Nothing [(Nothing,Nothing,TypeRef (Name (AlexPn 11 1 12) False [] "Int"))] []]
+HabitModule (Name <-> True [] "Main") [StructDecl <test050.hbt:1:1> (Name <test050.hbt:1:8> False [] "S") Nothing [(Nothing,Nothing,TypeRef (Name <test050.hbt:1:12> False [] "Int"))] []]

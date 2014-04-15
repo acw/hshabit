@@ -1,0 +1,1 @@
+HabitModule (Name <-> True [] "Main") [EquationDecl <test108.hbt:1:13> (Name <test108.hbt:1:1> False [] "foo") [PatTuple [PatRef (Name <test108.hbt:1:6> False [] "a"),PatRef (Name <test108.hbt:1:8> False [] "b"),PatRef (Name <test108.hbt:1:10> False [] "c")]] Nothing (ExprRef (Name <test108.hbt:1:15> False [] "b"))]

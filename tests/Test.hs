@@ -7,12 +7,24 @@ import Test.Framework.Providers.Program
 
 main :: IO ()
 main =
-  do ltests <- buildGoldTests "lexer" "-l"
-     ptests <- buildGoldTests "parser" "-p"
+  do ltests <- buildLexerTests
+     ptests <- buildParserTests
      defaultMain [ltests,ptests]
 
-buildGoldTests :: String -> String -> IO Test
-buildGoldTests name arg =
+buildLexerTests :: IO Test
+buildLexerTests  =
+  do stests <- buildGoldTests "scanner"    ["lex"]
+     itests <- buildGoldTests "indentinfo" ["lex","-i"]
+     etests <- buildGoldTests "lexer"      ["lex","-e"]
+     return (testGroup "Lexer Tests" [stests, itests, etests])
+
+buildParserTests :: IO Test
+buildParserTests  =
+  do ptests <- buildGoldTests "parser"     ["parse"]
+     return (testGroup "Parser Tests" [ptests])
+
+buildGoldTests :: String -> [String] -> IO Test
+buildGoldTests name args =
   do everything <- getDirectoryContents ("tests/" ++ name)
      let golds = filter (\ x -> takeExtension x == ".gld") everything
          tests = map (\ x -> replaceExtension x ".hbt") golds
@@ -24,7 +36,7 @@ buildGoldTests name arg =
     testProgramOutput
       (name ++ "/" ++ t)
       "./dist/build/hshabit/hshabit"
-      [arg, "tests/" ++ name ++ "/" ++ t]
+      (args ++ ["tests/" ++ name ++ "/" ++ t])
       (Just (== g))
       Nothing
   capWord "" = ""
