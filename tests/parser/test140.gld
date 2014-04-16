@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [EquationDecl <test140.hbt:1:16> (Name <test140.hbt:1:1> [] "foo") [PatTyped (PatRef (Name <test140.hbt:1:6> [] "a")) (TypeRef (Name <test140.hbt:1:11> [] "Int"))] Nothing (ExprRef (Name <test140.hbt:1:18> [] "a"))]

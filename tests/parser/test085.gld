@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [DataDecl <test085.hbt:1:1> (TypeRef (Name <test085.hbt:1:6> False [] "Foo")) [] [] []]
+HabitModule (Name <-> [] "Main") [DataDecl <test085.hbt:1:1> (TypeRef (Name <test085.hbt:1:6> [] "Foo")) [] [] []]

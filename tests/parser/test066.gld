@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [AreaDecl <test066.hbt:1:1> (Name <test066.hbt:1:6> False [] "a") Nothing (TypeApp (TypeRef (Name <test066.hbt:1:11> False [] "Ref")) [TypeRef (Name <test066.hbt:1:15> False [] "A")])]
+HabitModule (Name <-> [] "Main") [AreaDecl <test066.hbt:1:1> (Name <test066.hbt:1:6> [] "a") Nothing (TypeApp (TypeRef (Name <test066.hbt:1:11> [] "Ref")) [TypeRef (Name <test066.hbt:1:15> [] "A")])]

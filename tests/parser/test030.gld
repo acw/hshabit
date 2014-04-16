@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [TypeSigDecl <test030.hbt:1:3> (Name <test030.hbt:1:1> False [] "a") (TypeKind (TypeRef (Name <test030.hbt:1:7> False [] "b")) KindNat)]
+HabitModule (Name <-> [] "Main") [TypeSigDecl <test030.hbt:1:3> (Name <test030.hbt:1:1> [] "a") (TypeKind (TypeRef (Name <test030.hbt:1:7> [] "b")) KindNat)]

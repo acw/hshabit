@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [TypeDecl <test043.hbt:1:1> (TypeRef (Name <test043.hbt:1:6> False [] "Stream")) (TypeApp (TypeApp (TypeRef (Name <test043.hbt:1:15> False [] "Pair")) [TypeRef (Name <test043.hbt:1:20> False [] "Unsigned")]) [TypeRef (Name <test043.hbt:1:29> False [] "Stream")])]
+HabitModule (Name <-> [] "Main") [TypeDecl <test043.hbt:1:1> (TypeRef (Name <test043.hbt:1:6> [] "Stream")) (TypeApp (TypeApp (TypeRef (Name <test043.hbt:1:15> [] "Pair")) [TypeRef (Name <test043.hbt:1:20> [] "Unsigned")]) [TypeRef (Name <test043.hbt:1:29> [] "Stream")])]

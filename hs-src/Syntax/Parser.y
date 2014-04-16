@@ -7,6 +7,7 @@ import Data.Char(chr)
 import Prelude hiding (lex)
 import Syntax.IndentBlocks
 import Syntax.Lexeme
+import Syntax.ParseAST
 import Syntax.Posn
 
 }
@@ -136,6 +137,8 @@ DeclBlock :: { [Decl] }
   { [] }
   | "{" StandardDecls "}"
   { $2 }
+  | StandardDecl
+  { $1 }
 
 StandardDecls :: { [Decl] }
   : StandardDecl
@@ -515,7 +518,9 @@ Pat :: { Pattern }
   : AppPat
   { $1 }
   | Pat VarSymId AppPat
-  { PatApply (PatRef $2) [$1, $3] }
+  { case $1 of
+      PatInfix f others -> PatInfix f (others ++ [($2, $3)])
+      _                 -> PatInfix $1 [($2,$3)] }
 
 AppPat :: { Pattern }
   : APat
@@ -575,19 +580,21 @@ Expr :: { Expr }
 
 ApplicExpr :: { Expr }
   : "\\" PatList "->" Expr
-  { ExprLambda $2 $4 }
+  { ExprLambda $1 $2 $4 }
   | "do" Block
-  { ExprDo $2 }
+  { ExprDo $1 $2 }
   | InfExpr
   { $1 }
   | InfExpr "::" AppliedType
-  { ExprType $1 $3 }
+  { ExprType $2 $1 $3 }
 
 InfExpr :: { Expr }
   : AppExpr
   { $1 }
   | InfExpr Op AppExpr
-  { ExprApply (ExprRef $2) [$1, $3] }
+  { case $1 of
+      ExprInfix l others -> ExprInfix l (others ++ [($2, $3)])
+      _                  -> ExprInfix $1 [($2, $3)] }
 
 AppExpr :: { Expr }
   : AtomicExpr
@@ -597,19 +604,21 @@ AppExpr :: { Expr }
 
 LetExpr :: { Expr }
   : "let" DeclBlock "in" Expr
-  { ExprLet $2 $4 }
+  { ExprLet $1 $2 $4 }
 
 IfExpr :: { Expr }
   : "if" Expr "then" Expr "else" Expr
-  { ExprIf $2 $4 $6 }
+  { ExprIf $1 $2 $4 $6 }
+  | "if" "<-" Expr "then" Expr "else" Expr
+  { ExprIfM $1 $3 [StmtExpr $5] [StmtExpr $7] }
   | "if" "<-" Expr "then" Block "else" Block
-  { ExprIfM $3 $5 $7 }
+  { ExprIfM $1 $3 $5 $7 }
 
 CaseExpr :: { Expr }
   : "case" Expr "of" ExprAlts
-  { ExprCase $2 $4 }
+  { ExprCase $1 $2 $4 }
   | "case" "<-" Expr "of" BlockAlts
-  { ExprCaseM $3 $5 }
+  { ExprCaseM $1 $3 $5 }
 
 AtomicExpr :: { Expr }
   : QVarName
@@ -619,7 +628,7 @@ AtomicExpr :: { Expr }
   | Literal
   { ExprConst $1 }
   | AtomicExpr "." Id
-  { ExprFldRef $1 $3 }
+  { ExprFldRef $2 $1 $3 }
   | "(" Expr ")"
   { $2 }
   | "(" InfExpr Op ")"
@@ -627,15 +636,15 @@ AtomicExpr :: { Expr }
   | "(" Op Expr ")"
   { ExprApply (ExprRef $2) [$3] } -- FIXME
   | "(" TupleExprCommas ")"
-  { ExprTuple $2 }
+  { ExprTuple $1 $2 }
   | AtomicExpr "[" FieldInits "]"
-  { $3 $1 }
+  { $3 $2 $1 }
 
-FieldInits :: { Expr -> Expr }
+FieldInits :: { Posn -> Expr -> Expr }
   : Fields
-  { \ x -> ExprUpdate x $1 }
+  { \ s x -> ExprUpdate s x $1 }
   | StructFldInit
-  { \ x -> ExprBuild x $1 }
+  { \ s x -> ExprBuild s x $1 }
 
 Fields :: { [(Name, Maybe Expr)] }
   : VarName
@@ -739,9 +748,9 @@ Statements :: { [Statement] }
   : Statement ";" Statements
   { $1 : $3 }
   | VarId "<-" Statement ";" Statements
-  { StmtBind $1 $3 : $5 }
+  { StmtBind $2 $1 $3 : $5 }
   | "let" DeclBlock ";" Statements
-  { StmtLet $2 [] : $4 }
+  { StmtLet $1 $2 [] : $4 }
   | Statement
   { [$1] }
 
@@ -749,13 +758,13 @@ Statement :: { Statement }
   : Expr
   { StmtExpr $1 }
   | "let" DeclBlock "in" Block
-  { StmtLet $2 $4 }
+  { StmtLet $1 $2 $4 }
   | "if" Expr "then" Block
-  { StmtIf $2 $4 [] }
+  { StmtIf $1 $2 $4 [] }
   | "if" Expr "then" Block "else" Block
-  { StmtIf $2 $4 $6 }
+  { StmtIf $1 $2 $4 $6 }
   | "case" Expr "of" BlockAlts
-  { StmtCase $2 $4 }
+  { StmtCase $1 $2 $4 }
   -- The case<- item should be covered by Expr, above
 
 -- Types
@@ -788,7 +797,9 @@ Type :: { Type }
   : AppliedType
   { $1 }
   | Type TyOp AppliedType
-  { TypeApp (TypeRef $2) [$1, $3] }
+  { case $1 of
+      TypeInfix f others -> TypeInfix f (others ++ [($2, $3)])
+      _                  -> TypeInfix $1 [($2, $3)] }
 
 TupleTypeCommas :: { [Type] }
   : Type "," Type
@@ -824,15 +835,15 @@ VarId :: { Name }
   : varid
   { startName $1 }
   | "as"
-  { Name $1 False [] "as" }
+  { Name $1 [] "as" }
   | "hiding"
-  { Name $1 False [] "hiding" }
+  { Name $1 [] "hiding" }
   | "lab"
-  { Name $1 False [] "lab" }
+  { Name $1 [] "lab" }
   | "module"
-  { Name $1 False [] "module" }
+  { Name $1 [] "module" }
   | "qualified"
-  { Name $1 False [] "qualified" }
+  { Name $1 [] "qualified" }
 
 QVarId :: { Name }
   : VarId
@@ -844,9 +855,9 @@ VarSymId :: { Name }
   : varsymid
   { startName $1 }
   | "*"
-  { Name $1 False [] "*" }
+  { Name $1 [] "*" }
   | "/"
-  { Name $1 False [] "/" }
+  { Name $1 [] "/" }
 
 QVarSymId :: { Name }
   : VarSymId
@@ -862,7 +873,7 @@ ConSymId :: { Name }
   : consymid
   { startName $1 }
   | ":#"
-  { Name $1 False [] ":#" }
+  { Name $1 [] ":#" }
 
 VarName :: { Name }
   : VarId
@@ -930,7 +941,7 @@ TyCon :: { Name }
   | "(" QVarSymId ")"
   { $2 }
   | "(" "->" ")"
-  { Name $2 False [] "->" }
+  { Name $2 [] "->" }
 
 TyConOp :: { Name }
   : QConSymName
@@ -938,7 +949,7 @@ TyConOp :: { Name }
   | QVarSymId
   { $1 }
   | "->"
-  { Name $1 False [] "->" }
+  { Name $1 [] "->" }
 
 TyOp :: { Name }
   : TyConOp
@@ -954,149 +965,6 @@ ModName :: { Name }
 
 
 {
-
-data HabitModule = HabitModule Name [Decl]
- deriving (Show)
-
-data Decl        = ImportDecl Posn Bool Name (Maybe Name) ImportMods
-                 | FixityDecl Posn FixityType Bool (Maybe Integer) [Name]
-                 | TypeSigDecl Posn Name Type
-                 | TypeDecl Posn Type Type
-                 | StructDecl Posn Name (Maybe Type) [StructField] [Name]
-                 | BitdataDecl Posn Name (Maybe Type) [BitdataField] [Name]
-                 | AreaDecl Posn Name (Maybe Expr) Type
-                 | ClassDecl Posn Type (Maybe Type) [Constraint] [Decl]
-                 | InstanceDecl Posn [Instance]
-                 | DataDecl Posn Type [Type] [Name] [Constraint]
-                 | EquationDecl Posn Name [Pattern] (Maybe Expr) Expr
-                 | LocalDecl [Decl] [Decl]
- deriving (Show)
-
-data ImportMods = IncludeOnly [Name]
-                | HidingNames [Name]
-                | NoMods
- deriving (Show)
-
-data Constraint = FunDep [Name] [Name]
-                | Superclass Name [Type]
- deriving (Show)
-
-data Instance = Instance [Predicate] [Predicate] [Decl]
- deriving (Show)
-
-data FixityType = FixityLeft | FixityRight | FixityBoth
-  deriving (Show)
-
-type StructField = (Maybe Name, Maybe Expr, Type)
-type BitdataField = (Name, [Either Expr (Name, Maybe Expr, Type)])
-
-data Expr = ExprConst ConstVal
-          | ExprTuple [Expr]
-          | ExprRef Name
-          | ExprLet [Decl] Expr
-          | ExprIf Expr Expr Expr
-          | ExprIfM Expr [Statement] [Statement]
-          | ExprCase Expr [ExprCase]
-          | ExprCaseM Expr [BlockCase]
-          | ExprDo [Statement]
-          | ExprLambda [Pattern] Expr
-          | ExprType Expr Type
-          | ExprInfix Expr Name Expr
-          | ExprApply Expr [Expr]
-          | ExprFldRef Expr Name
-          | ExprUpdate Expr [(Name, Maybe Expr)]
-          | ExprBuild Expr [(Name, Expr)]
-  deriving (Show)
-
-data Statement = StmtBind Name Statement
-               | StmtLet [Decl] [Statement]
-               | StmtExpr Expr
-               | StmtIf Expr [Statement] [Statement]
-               | StmtCase Expr [BlockCase]
-  deriving (Show)
-
-data ExprCase = ECase Pattern (Maybe Expr) Expr
-              | EWhereCase [Decl] [ExprCase]
-  deriving (Show)
-
-
-data BlockCase = BCase Pattern (Maybe Expr) [Statement]
-               | BWhereCase [Decl] [BlockCase]
-  deriving (Show)
-
-data Pattern = PatBlank
-             | PatConst ConstVal
-             | PatRef Name
-             | PatTyped Pattern Type
-             | PatTuple [Pattern]
-             | PatStruct Name [(Name, Maybe Pattern)]
-             | PatNamed Name Pattern
-             | PatApply Pattern [Pattern]
-  deriving (Show)
-
-data Type = WithPredicates [Predicate] Type
-          | TypeRef Name
-          | TypeUnit
-          | TypeInt Integer
-          | TypeLabel Name
-          | TypeKind Type Kind
-          | TypeApp Type [Type]
-          | TypeTuple [Type]
-  deriving (Show)
-
-data Kind = KindStar | KindType | KindNat | KindArea | KindLabel
-          | KindFun Kind Kind
-  deriving (Show)
-
-data ConstVal = ConstInt Posn Integer Int
-              | ConstVec Posn Integer Int Int
-              | ConstFloat Posn Float
-              | ConstDouble Posn Double
-              | ConstUnit Posn
-              | ConstLabel Posn Name
-  deriving (Show)
-
-translateConst :: Lexeme -> ConstVal
-translateConst (IntConst a b c) = ConstInt a b c
-translateConst (VecConst a b c d) = ConstVec a b c d
-translateConst (FloatConst a (FVal f)) = ConstFloat a f
-translateConst (FloatConst a (DVal d)) = ConstDouble a d
-translateConst _ = error "Incorrect lexeme to translateConst"
-
-data Predicate = Predicate (Maybe Type) Type
-               | SelectPredicate Type Name Type
-               | FailPredicate Predicate
-  deriving (Show)
-
-data Name       = Name Posn Bool [String] String
- deriving (Show)
-
-defaultMod :: Name
-defaultMod = Name EmptyPosn True [] "Main"
-
-startName :: Lexeme -> Name
-startName (ReservedId p x)  = Name p False [] x
-startName (ReservedSym p x) = Name p (isEmptyPosn p) [] x
-startName (VarId p bs)      = Name p False [] (fromBS bs)
-startName (ConId p bs)      = Name p False [] (fromBS bs)
-startName (QVarId p bs)     = Name p False [] (fromBS bs)
-startName (QConId p bs)     = Name p False [] (fromBS bs)
-startName (VarSymId p bs)   = Name p False [] (fromBS bs)
-startName (ConSymId p bs)   = Name p False [] (fromBS bs)
-startName (QVarSymId p bs)  = Name p False [] (fromBS bs)
-startName (QConSymId p bs)  = Name p False [] (fromBS bs)
-startName x                 = error ("Bad token for startName: " ++ show x)
-
-addName :: Name -> Lexeme -> Name
-addName (Name p m ls x) t = Name p m (ls ++ [x]) y
- where Name _ _ _ y = startName t
-
-addName' :: Name -> Name -> Name
-addName' (Name p1 m1 ls1 x1) (Name _ m2 ls2 x2) =
-  Name p1 (m1 && m2) (ls1 ++ [x1] ++ ls2) x2
-
-fromBS :: ByteString -> String
-fromBS = map (chr . fromIntegral) . unpack
 
 happyError :: [Lexeme] -> a
 happyError []    = error "Parse error at end of file!"

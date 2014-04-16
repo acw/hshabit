@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [FixityDecl <test016.hbt:1:1> FixityRight True (Just 5) [Name <test016.hbt:1:15> False [] "->"]]
+HabitModule (Name <-> [] "Main") [FixityDecl <test016.hbt:1:1> FixityRight True (Just 5) [Name <test016.hbt:1:15> [] "->"]]

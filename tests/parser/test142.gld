@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [EquationDecl <test142.hbt:1:17> (Name <test142.hbt:1:1> [] "foo") [PatInfix (PatRef (Name <test142.hbt:1:6> [] "a")) [(Name <test142.hbt:1:8> [] "+",PatRef (Name <test142.hbt:1:10> [] "b")),(Name <test142.hbt:1:12> [] "-",PatRef (Name <test142.hbt:1:14> [] "c"))]] Nothing (ExprConst (ConstInt <test142.hbt:1:19> 4 10))]

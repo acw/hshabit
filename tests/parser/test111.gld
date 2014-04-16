@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [EquationDecl <test111.hbt:1:16> (Name <test111.hbt:1:1> False [] "foo") [PatStruct (Name <test111.hbt:1:5> False [] "Con") [(Name <test111.hbt:1:9> False [] "field",Nothing)]] Nothing (ExprRef (Name <test111.hbt:1:18> False [] "field"))]
+HabitModule (Name <-> [] "Main") [EquationDecl <test111.hbt:1:16> (Name <test111.hbt:1:1> [] "foo") [PatStruct (Name <test111.hbt:1:5> [] "Con") [(Name <test111.hbt:1:9> [] "field",Nothing)]] Nothing (ExprRef (Name <test111.hbt:1:18> [] "field"))]

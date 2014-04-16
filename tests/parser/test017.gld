@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [FixityDecl <test017.hbt:1:1> FixityRight False (Just 3) [Name <test017.hbt:1:10> False [] "&&"]]
+HabitModule (Name <-> [] "Main") [FixityDecl <test017.hbt:1:1> FixityRight False (Just 3) [Name <test017.hbt:1:10> [] "&&"]]

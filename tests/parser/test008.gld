@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [ImportDecl <test008.hbt:1:1> True (Name <test008.hbt:1:18> False [] "Data.List") Nothing NoMods]
+HabitModule (Name <-> [] "Main") [ImportDecl <test008.hbt:1:1> True (Name <test008.hbt:1:18> ["Data"] "List") Nothing NoMods]

@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [StructDecl <test050.hbt:1:1> (Name <test050.hbt:1:8> False [] "S") Nothing [(Nothing,Nothing,TypeRef (Name <test050.hbt:1:12> False [] "Int"))] []]
+HabitModule (Name <-> [] "Main") [StructDecl <test050.hbt:1:1> (Name <test050.hbt:1:8> [] "S") Nothing [(Nothing,Nothing,TypeRef (Name <test050.hbt:1:12> [] "Int"))] []]

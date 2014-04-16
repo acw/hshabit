@@ -1,1 +1,1 @@
-HabitModule (Name <-> True [] "Main") [BitdataDecl <test060.hbt:1:1> (Name <test060.hbt:1:9> False [] "Foo") (Just (TypeInt 8)) [] []]
+HabitModule (Name <-> [] "Main") [BitdataDecl <test060.hbt:1:1> (Name <test060.hbt:1:9> [] "Foo") (Just (TypeInt 8)) [] []]
