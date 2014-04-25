@@ -1,0 +1,6 @@
+Data.List
+Data.Foo.Bar.Goo
+Data.Foo.
+Data.List.uncons
+Data.List.++
+Data.List.:

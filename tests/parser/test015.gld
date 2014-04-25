@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [ImportDecl <test015.hbt:1:1> True (Name <test015.hbt:1:18> ["Data"] "List") (Just (Name <test015.hbt:1:45> [] "List")) (HidingNames [Name <test015.hbt:1:36> [] "cons"])]

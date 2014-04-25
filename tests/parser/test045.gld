@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [TypeDecl <test045.hbt:1:1> (TypeApp (TypeRef (Name <test045.hbt:1:9> [] "Cons")) [TypeRef (Name <test045.hbt:1:6> [] "a"),TypeRef (Name <test045.hbt:1:15> [] "b")]) (TypeApp (TypeApp (TypeRef (Name <test045.hbt:1:19> [] "Pair")) [TypeRef (Name <test045.hbt:1:24> [] "a")]) [TypeRef (Name <test045.hbt:1:26> [] "b")])]

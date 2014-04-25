@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [DataDecl <test088.hbt:1:1> (TypeRef (Name <test088.hbt:1:6> [] "Foo")) [TypeRef (Name <test088.hbt:1:12> [] "Bar")] [Name <test088.hbt:1:26> [] "Goo",Name <test088.hbt:1:31> [] "Zoo"] []]

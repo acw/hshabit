@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [AreaDecl <test068.hbt:1:1> (Name <test068.hbt:1:7> [] "+") Nothing (TypeApp (TypeRef (Name <test068.hbt:1:13> [] "Ref")) [TypeRef (Name <test068.hbt:1:17> [] "B")])]

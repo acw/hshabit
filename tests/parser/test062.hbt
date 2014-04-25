@@ -1,0 +1,1 @@
+bitdata PCI = PCI [ bus :: Bit 8 | dev :: Bit 5 | fun :: Bit 3]

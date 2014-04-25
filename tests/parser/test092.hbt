@@ -1,0 +1,1 @@
+data Foo a | Show a = Bar a

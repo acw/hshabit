@@ -1,1 +1,0 @@
-infixl 4 `Data.List.cons`

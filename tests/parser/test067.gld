@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [AreaDecl <test067.hbt:1:1> (Name <test067.hbt:1:6> [] "a") (Just (ExprRef (Name <test067.hbt:1:11> [] "x"))) (TypeApp (TypeRef (Name <test067.hbt:1:16> [] "Ref")) [TypeRef (Name <test067.hbt:1:20> [] "A")])]

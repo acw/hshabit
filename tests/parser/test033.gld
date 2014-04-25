@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [TypeSigDecl <test033.hbt:1:3> (Name <test033.hbt:1:1> [] "a") (WithPredicates [Predicate (Just (TypeInfix (TypeRef (Name <test033.hbt:1:7> [] "n")) [(Name <test033.hbt:1:9> [] "+",TypeRef (Name <test033.hbt:1:11> [] "m"))])) (TypeRef (Name <test033.hbt:1:15> [] "p"))] (TypeRef (Name <test033.hbt:1:21> [] "p")))]

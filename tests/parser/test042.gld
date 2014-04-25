@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [TypeDecl <test042.hbt:1:1> (TypeApp (TypeRef (Name <test042.hbt:1:6> [] "Monad")) [TypeRef (Name <test042.hbt:1:12> [] "m")]) (TypeApp (TypeRef (Name <test042.hbt:1:16> [] "Foo")) [TypeRef (Name <test042.hbt:1:20> [] "m")])]

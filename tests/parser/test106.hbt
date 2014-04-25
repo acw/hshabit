@@ -1,0 +1,1 @@
+foo a@(Apple _ _) = a

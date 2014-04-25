@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [DataDecl <test091.hbt:1:1> (TypeApp (TypeRef (Name <test091.hbt:1:8> [] ":^:")) [TypeRef (Name <test091.hbt:1:6> [] "a"),TypeRef (Name <test091.hbt:1:12> [] "b")]) [TypeInfix (TypeRef (Name <test091.hbt:1:16> [] "a")) [(Name <test091.hbt:1:18> [] ":^:",TypeRef (Name <test091.hbt:1:22> [] "b"))]] [] []]

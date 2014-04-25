@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [TypeSigDecl <test026.hbt:1:3> (Name <test026.hbt:1:1> [] "a") (WithPredicates [Predicate Nothing (TypeTuple [TypeApp (TypeRef (Name <test026.hbt:1:7> [] "Foo")) [TypeRef (Name <test026.hbt:1:11> [] "b")],TypeApp (TypeRef (Name <test026.hbt:1:14> [] "Bar")) [TypeRef (Name <test026.hbt:1:18> [] "b")]])] (TypeRef (Name <test026.hbt:1:24> [] "b")))]

@@ -1,0 +1,1 @@
+data Foo = Bar | Goo deriving (Show)

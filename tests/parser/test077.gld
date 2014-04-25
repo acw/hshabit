@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [ClassDecl <test077.hbt:1:1> (TypeApp (TypeApp (TypeRef (Name <test077.hbt:1:7> [] "Foo")) [TypeRef (Name <test077.hbt:1:11> [] "a")]) [TypeRef (Name <test077.hbt:1:13> [] "b")]) Nothing [Superclass (Name <test077.hbt:1:17> [] "Bar") [TypeRef (Name <test077.hbt:1:21> [] "a")]] []]

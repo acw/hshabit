@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [InstanceDecl <test081.hbt:1:1> [Instance [Predicate Nothing (TypeApp (TypeRef (Name <test081.hbt:1:10> [] "Foo")) [TypeRef (Name <test081.hbt:1:14> [] "a")])] [Predicate Nothing (TypeApp (TypeRef (Name <test081.hbt:1:19> [] "Bar")) [TypeRef (Name <test081.hbt:1:23> [] "a")])] []]]

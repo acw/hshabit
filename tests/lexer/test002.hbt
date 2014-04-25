@@ -1,0 +1,5 @@
+Foo :: Int
+foo = x + y
+ where
+  x = 4
+  y = 5

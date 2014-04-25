@@ -1,14 +1,17 @@
-{ module Syntax.Parser(parseHabit) where
+--  vim:set filetype=haskell:
+{
+module Syntax.Parser(parse, HabitModule) where
 
 import Data.ByteString.Lazy(ByteString,unpack)
 import Data.Char(chr)
-import Syntax.Tokens
+import Syntax.Layout
+import Syntax.Lexeme
+import Syntax.ParseAST
+import Syntax.Posn
 
 }
 
 %name parseHabit
-%monad { Alex }
-%lexer { tokenize } { EOF }
 
 %tokentype { Lexeme }
 %token
@@ -21,7 +24,6 @@ import Syntax.Tokens
   "deriving"    { ReservedId $$ "deriving" }
   "do"          { ReservedId $$ "do" }
   "else"        { ReservedId $$ "else" }
-  "extends"     { ReservedId $$ "else" }
   "fails"       { ReservedId $$ "fails" }
   "hiding"      { ReservedId $$ "hiding" }
   "if"          { ReservedId $$ "if" }
@@ -42,34 +44,38 @@ import Syntax.Tokens
   "type"        { ReservedId $$ "type" }
   "where"       { ReservedId $$ "where" }
 
-  "("           { ReservedSym $$ "(" _ }
-  ")"           { ReservedSym $$ ")" _ }
-  "|"           { ReservedSym $$ "|" _ }
-  "="           { ReservedSym $$ "=" _ }
-  ","           { ReservedSym $$ "," _ }
-  "`"           { ReservedSym $$ "`" _ }
-  "{"           { ReservedSym $$ "{" _ }
-  ";"           { ReservedSym $$ ";" _ }
-  "}"           { ReservedSym $$ "}" _ }
-  "["           { ReservedSym $$ "[" _ }
-  "]"           { ReservedSym $$ "]" _ }
-  "\\"          { ReservedSym $$ "\\" _ }
-  "<-"          { ReservedSym $$ "<-" _ }
-  "->"          { ReservedSym $$ "->" _ }
-  "=>"          { ReservedSym $$ "=>" _ }
-  "::"          { ReservedSym $$ "::" _ }
-  "#."          { ReservedSym $$ "#." _ }
-  "@"           { ReservedSym $$ "@" _ }
-  "_"           { ReservedSym $$ "_" _ }
-  "."           { ReservedSym $$ "." _ }
-  "*"           { ReservedSym $$ "*" _ }
-  "/"           { ReservedSym $$ "/" _ }
-  ":#"          { ReservedSym $$ ":#" _ }
+  "("           { ReservedSym $$ "("  }
+  ")"           { ReservedSym $$ ")"  }
+  "|"           { ReservedSym $$ "|"  }
+  "="           { ReservedSym $$ "="  }
+  ","           { ReservedSym $$ ","  }
+  "`"           { ReservedSym $$ "`"  }
+  "{"           { ReservedSym $$ "{"  }
+  ";"           { ReservedSym $$ ";"  }
+  "}"           { ReservedSym $$ "}"  }
+  "["           { ReservedSym $$ "["  }
+  "]"           { ReservedSym $$ "]"  }
+  "\\"          { ReservedSym $$ "\\" }
+  "<-"          { ReservedSym $$ "<-" }
+  "->"          { ReservedSym $$ "->" }
+  "=>"          { ReservedSym $$ "=>" }
+  "::"          { ReservedSym $$ "::" }
+  "#."          { ReservedSym $$ "#." }
+  "@"           { ReservedSym $$ "@"  }
+  "_"           { ReservedSym $$ "_"  }
+  "."           { ReservedSym $$ "."  }
+  "*"           { ReservedSym $$ "*"  }
+  "/"           { ReservedSym $$ "/"  }
+  ":#"          { ReservedSym $$ ":#" }
 
   varid         { VarId _ _ }
   conid         { ConId _ _ }
   varsymid      { VarSymId _ _ }
   consymid      { ConSymId _ _ }
+  qvarid        { QVarId _ _ }
+  qconid        { QConId _ _ }
+  qvarsymid     { QVarSymId _ _ }
+  qconsymid     { QConSymId _ _ }
   int           { IntConst _ _ _ }
   vec           { VecConst _ _ _ _ }
   float         { FloatConst _ _ }
@@ -80,30 +86,64 @@ import Syntax.Tokens
 Habit :: { HabitModule }
   : "{" Prog "}"
   { HabitModule defaultMod $2 }
+  | "{" Prog ";" "}"
+  { HabitModule defaultMod $2 }
   | "module" ModName "where" "{" Prog "}"
+  { HabitModule $2 $5 }
+  | "module" ModName "where" "{" Prog ";" "}"
   { HabitModule $2 $5 }
 
 Prog :: { [Decl] }
   :
   { [] }
-  | Decl
+  | TopDecl
   { $1 }
-  | Prog ";" Decl
+  | Prog ";" TopDecl
   { $1 ++ $3 }
 
 -- Declarations
 
-Decl :: { [Decl] }
+TopDecl :: { [Decl] }
   : ImportDecl
   { [$1] }
   | FixityDecl
   { [$1] }
-  | TypeSigDecl
-  { $1 }
   | TypeDecl
   { [$1] }
   | StructDecl
   { [$1] }
+  | BitdataDecl
+  { [$1] }
+  | AreaDecl
+  { $1 }
+  | ClassDecl
+  { [$1] }
+  | InstanceDecl
+  { [$1] }
+  | DataDecl
+  { [$1] }
+  | StandardDecl
+  { $1 }
+
+StandardDecl :: { [Decl] }
+  : TypeSigDecl
+  { $1 }
+  | Equation
+  { $1 }
+
+DeclBlock :: { [Decl] }
+  : "{" "}"
+  { [] }
+  | "{" StandardDecls "}"
+  { $2 }
+  | StandardDecl
+  { $1 }
+
+StandardDecls :: { [Decl] }
+  : StandardDecl
+  { $1 }
+  | StandardDecls ";" StandardDecl
+  { $1 ++ $3 }
 
 -- Import Statements
 ImportDecl :: { Decl }
@@ -135,9 +175,9 @@ ImportNameList :: { [Name] }
   { $2 }
 
 NameList :: { [Name] }
-  : VarName
+  : Id
   { [$1] }
-  | NameList "," VarName
+  | NameList "," Id
   { $1 ++ [$3] }
 
 -- Fixity Declarations Statements
@@ -163,74 +203,42 @@ Prec :: { Maybe Integer }
   { let IntConst _ v _ = $1 in Just v }
 
 CommaOpList :: { [Name] }
-  : Oper
+  : QVarSymName
   { [$1] }
-  | CommaOpList "," Oper
+  | CommaOpList "," QVarSymName
   { $1 ++ [$3] }
 
 CommaTyopList :: { [Name] }
-  : TyOper
+  : TyOp
   { [$1] }
-  | CommaTyopList "," TyOper
+  | CommaTyopList "," TyOp
   { $1 ++ [$3] }
-
-Oper :: { Name }
-  : VarSymId
-  { $1 }
-  | "`" VarId "`"
-  { $2 }
-  | "`" ModName "." VarId "`"
-  { addName' $2 $4 }
-  | consymid
-  { startName $1 }
-  | "`" ModName "`"
-  { $2 }
-
-TyOper :: { Name }
-  : "`" VarId "`"
-  { $2 }
-  | "`" ModName VarId "`"
-  { addName' $2 $3 }
-  | consymid
-  { startName $1 }
-  | "`" ModName "`"
-  { $2 }
-  | VarSymId
-  { $1 }
-  | "->"
-  { Name $1 False [] "->" }
 
 -- Type Signatures
 
 TypeSigDecl :: { [Decl] }
   : TypeSigNames "::" Type
   { map (\ n -> TypeSigDecl $2 n $3) $1 }
-  | TypeSigNames "::" "(" Predicate ")" "=>" Type
-  { map (\ n -> TypeSigDecl $2 n (WithPredicates $4 $7)) $1 }
   | TypeSigNames "::" Predicate "=>" Type
-  { map (\ n -> TypeSigDecl $2 n (WithPredicates $3 $5)) $1 }
+  { map (\ n -> TypeSigDecl $2 n (WithPredicates [$3] $5)) $1 }
 
 TypeSigNames :: { [Name] }
-  : TypeSigName
+  : VarName
   { [$1] }
-  | TypeSigNames "," TypeSigName
+  | TypeSigNames "," VarName
   { $1 ++ [$3] }
 
-TypeSigName :: { Name }
-  : VarId
-  { $1 }
-  | "(" VarSymId ")"
-  { $2 }
-
-Predicate :: { [Predicate] }
+Predicate :: { Predicate }
   : Type
-  { buildPredicate $1 Nothing False }
+  { Predicate Nothing $1 }
   | Type "=" Type
-  { buildPredicate $1 (Just $3) False }
-  | Type "fails"
-  { buildPredicate $1 Nothing True }
-  | Type "=" Type "fails"
-  { buildPredicate $1 (Just $3) True }
+  { Predicate (Just $1) $3 }
+  | Predicate "fails"
+  { FailPredicate $1 }
+  | "(" Type "=" Type ")"
+  { Predicate (Just $2) $4 }
+  | "(" Predicate "fails" ")"
+  { FailPredicate $2 }
 
 -- Type Declarations
 
@@ -239,24 +247,22 @@ TypeDecl :: { Decl }
   { TypeDecl $1 $2 $4 }
 
 TypeLhs :: { Type }
-  : TypeParam consymid TypeParam
-  { TypeApp (TypeRef (startName $2)) [$1, $3] }
-  | TypeParam "`" conid "`" TypeParam
-  { TypeApp (TypeRef (startName $3)) [$1, $5] }
+  : TypeParam ConSymName TypeParam
+  { TypeApp (TypeRef $2) [$1, $3] }
   | PreTypeLhs
   { $1 }
 
 PreTypeLhs :: { Type }
-  : conid
-  { TypeRef (startName $1) }
+  : ConName
+  { TypeRef $1 }
   | PreTypeLhs TypeParam
   { TypeApp $1 [$2] }
   | "(" TypeLhs ")"
   { $2 }
 
 TypeParam :: { Type }
-  : varid
-  { TypeRef (startName $1) }
+  : VarId
+  { TypeRef $1 }
   | "(" TypeParam ")"
   { $2 }
   | "(" TypeParam "::" Kind ")"
@@ -265,22 +271,22 @@ TypeParam :: { Type }
 -- Struct Decl
 
 StructDecl :: { Decl }
-  : "struct" conid "[" "]"
-  { StructDecl $1 (startName $2) Nothing [] [] }
-  | "struct" conid "[" "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) Nothing [] $6 }
-  | "struct" conid "[" StructRegions "]"
-  { StructDecl $1 (startName $2) Nothing $4 [] }
-  | "struct" conid "[" StructRegions "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) Nothing $4 $7 }
-  | "struct" conid "/" Type "[" "]"
-  { StructDecl $1 (startName $2) (Just $4) [] [] }
-  | "struct" conid "/" Type "[" "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) (Just $4) [] $8 }
-  | "struct" conid "/" Type "[" StructRegions "]"
-  { StructDecl $1 (startName $2) (Just $4) $6 [] }
-  | "struct" conid "/" Type "[" StructRegions "]" "deriving" DeriveList
-  { StructDecl $1 (startName $2) (Just $4) $6 $9 }
+  : "struct" ConName "[" "]"
+  { StructDecl $1 $2 Nothing [] [] }
+  | "struct" ConName "[" "]" "deriving" DeriveList
+  { StructDecl $1 $2 Nothing [] $6 }
+  | "struct" ConName "[" StructRegions "]"
+  { StructDecl $1 $2 Nothing $4 [] }
+  | "struct" ConName "[" StructRegions "]" "deriving" DeriveList
+  { StructDecl $1 $2 Nothing $4 $7 }
+  | "struct" ConName "/" Type "[" "]"
+  { StructDecl $1 $2 (Just $4) [] [] }
+  | "struct" ConName "/" Type "[" "]" "deriving" DeriveList
+  { StructDecl $1 $2 (Just $4) [] $8 }
+  | "struct" ConName "/" Type "[" StructRegions "]"
+  { StructDecl $1 $2 (Just $4) $6 [] }
+  | "struct" ConName "/" Type "[" StructRegions "]" "deriving" DeriveList
+  { StructDecl $1 $2 (Just $4) $6 $9 }
 
 StructRegions :: { [StructField] }
   : StructRegion
@@ -289,7 +295,7 @@ StructRegions :: { [StructField] }
   { $1 ++ $3 }
 
 StructRegion :: { [StructField] }
-  : UnkindedType
+  : Type
   { [(Nothing, Nothing, $1)] }
   | FieldNames "::" Type
   { map (\ (a,b) -> (Just a, b, $3)) $1 }
@@ -301,89 +307,504 @@ FieldNames :: { [(Name, Maybe Expr)] }
   { $1 ++ [$3] }
 
 FieldName :: { (Name, Maybe Expr) }
-  : varid
-  { (startName $1, Nothing) }
-  | varid "<-" Expr
-  { (startName $1, Just $3) }
+  : VarId
+  { ($1, Nothing) }
+  | VarId "<-" InfExpr
+  { ($1, Just $3) }
 
 DeriveList :: { [Name] }
-  : ModName
+  : ConName
   { [$1] }
-  | "(" ModNameList ")"
+  | "(" ConNameList ")"
   { $2 }
 
-ModNameList :: { [Name] }
-  : ModName
+ConNameList :: { [Name] }
+  : ConName
   { [$1] }
-  | ModNameList "," ModName
+  | ConNameList "," ConName
   { $1 ++ [$3] }
 
+-- Bitdata Declarations
+BitdataDecl :: { Decl }
+  : "bitdata" ConName
+  { BitdataDecl $1 $2 Nothing [] [] }
+  | "bitdata" ConName "deriving" DeriveList
+  { BitdataDecl $1 $2 Nothing [] $4 }
+  | "bitdata" ConName BitdataCons
+  { BitdataDecl $1 $2 Nothing $3 [] }
+  | "bitdata" ConName BitdataCons "deriving" DeriveList
+  { BitdataDecl $1 $2 Nothing $3 $5 }
+  | "bitdata" ConName "/" Type
+  { BitdataDecl $1 $2 (Just $4) [] [] }
+  | "bitdata" ConName "/" Type "deriving" DeriveList
+  { BitdataDecl $1 $2 (Just $4) [] $6 }
+  | "bitdata" ConName "/" Type BitdataCons
+  { BitdataDecl $1 $2 (Just $4) $5 [] }
+  | "bitdata" ConName "/" Type BitdataCons "deriving" DeriveList
+  { BitdataDecl $1 $2 (Just $4) $5 $7 }
+
+BitdataCons :: { [(Name, [Either Expr (Name, Maybe Expr, Type)])] }
+  : "=" BitdataCon
+  { [$2] }
+  | BitdataCons "|" BitdataCon
+  { $1 ++ [$3] }
+
+BitdataCon :: { (Name, [Either Expr (Name, Maybe Expr, Type)]) }
+  : ConName "[" BitdataFields "]"
+  { ($1, $3) }
+
+BitdataFields :: { [Either Expr (Name, Maybe Expr, Type)] }
+  : BitdataField
+  { [$1] }
+  | BitdataFields "|" BitdataField
+  { $1 ++ [$3] }
+
+BitdataField :: { Either Expr (Name, Maybe Expr, Type) }
+  : VarName "::" Type
+  { Right ($1, Nothing, $3) }
+  | VarName "=" InfExpr "::" Type
+  { Right ($1, Just $3, $5) }
+  | AtomicExpr
+  { Left $1 }
+
+-- Area Declarations
+
+AreaDecl :: { [Decl] }
+  : "area" AreaVars "::" Type
+  { map (\ (n,v) -> AreaDecl $1 n v $4) $2 }
+  | "area" AreaVars "::" Type "where" DeclBlock
+  { [LocalDecl $6 (map (\ (n,v) -> AreaDecl $1 n v $4) $2)] }
+
+AreaVars :: { [(Name, Maybe Expr)] }
+  : AreaVar
+  { [$1] }
+  | AreaVars "," AreaVar
+  { $1 ++ [$3] }
+
+AreaVar :: { (Name, Maybe Expr) }
+  : VarName
+  { ($1, Nothing) }
+  | VarName "<-" InfExpr
+  { ($1, Just $3) }
+
+-- Class Declarations
+
+ClassDecl :: { Decl }
+  : "class" ClassLhs
+  { let (a,b) = $2 in ClassDecl $1 a b [] [] }
+  | "class" ClassLhs "|" CommaConstList
+  { let (a,b) = $2 in ClassDecl $1 a b $4 [] }
+  | "class" ClassLhs "where" DeclBlock
+  { let (a,b) = $2 in ClassDecl $1 a b [] $4 }
+  | "class" ClassLhs "|" CommaConstList "where" DeclBlock
+  { let (a,b) = $2 in ClassDecl $1 a b $4 $6 }
+
+ClassLhs :: { (Type, Maybe Type) }
+  : TypeLhs
+  { ($1, Nothing) }
+  | TypeLhs "=" TypeParam
+  { ($1, Just $3) }
+
+CommaConstList :: { [Constraint] }
+  : Constraint
+  { [$1] }
+  | CommaConstList "," Constraint
+  { $1 ++ [$3] }
+
+Constraint :: { Constraint }
+  : FunDep
+  { $1 }
+  | ConName TypeList
+  { Superclass $1 $2 }
+
+TypeList :: { [Type] }
+  : VarId
+  { [TypeRef $1] }
+  | "(" Type ")"
+  { [$2] }
+  | TypeList VarId
+  { $1 ++ [TypeRef $2] }
+  | TypeList "(" Type ")"
+  { $1 ++ [$3] }
+
+FunDep :: { Constraint }
+  : "->" ListVar
+  { FunDep [] $2 }
+  | ListVar "->" ListVar
+  { FunDep $1 $3 }
+
+ListVar :: { [Name] }
+  : VarId
+  { [$1] }
+  | ListVar VarId
+  { $1 ++ [$2] }
+
+-- Instance Declarations
+
+InstanceDecl :: { Decl }
+  : "instance" Instance
+  { InstanceDecl $1 [$2] }
+  | InstanceDecl "else" Instance
+  { let InstanceDecl src xs = $1
+    in InstanceDecl src (xs ++ [$3]) }
+
+Instance :: { Instance }
+  : Predicate
+  { Instance [$1] [] [] }
+  | Predicate "if" Predicate
+  { Instance [$1] [$3] [] }
+  | Predicate "where" DeclBlock
+  { Instance [$1] [] $3 }
+  | Predicate "if" Predicate "where" DeclBlock
+  { Instance [$1] [$3] $5 }
+
+-- Data Declarations
+
+DataDecl :: { Decl }
+  : "data" TypeLhs
+  { DataDecl $1 $2 [] [] [] }
+  | "data" TypeLhs "=" DataCons
+  { DataDecl $1 $2 $4 [] [] }
+  | "data" TypeLhs "|" CommaConstList "=" DataCons
+  { DataDecl $1 $2 $6 [] $4 }
+  | "data" TypeLhs "deriving" DeriveList
+  { DataDecl $1 $2 [] $4 [] }
+  | "data" TypeLhs "=" DataCons "deriving" DeriveList
+  { DataDecl $1 $2 $4 $6 [] }
+  | "data" TypeLhs "|" CommaConstList "=" DataCons "deriving" DeriveList
+  { DataDecl $1 $2 $6 $8 $4 }
+
+DataCons :: { [Type] }
+  : Type
+  { [$1] }
+  | DataCons "|" Type
+  { $1 ++ [$3] }
+
+-- Equations
+
+Equation :: { [Decl] }
+  : VarName "=" Expr
+  { [EquationDecl $2 $1 [] Nothing $3] }
+  | VarName GuardEqRhs
+  { map (\f -> f $1 []) $2 }
+  | VarName PatList "=" Expr
+  { [EquationDecl $3 $1 $2 Nothing $4] }
+  | VarName PatList GuardEqRhs
+  { map (\f -> f $1 $2) $3 }
+  | VarName "=" Expr "where" DeclBlock
+  { [LocalDecl $5 [EquationDecl $2 $1 [] Nothing $3]] }
+  | VarName GuardEqRhs "where" DeclBlock
+  { [LocalDecl $4 (map (\f -> f $1 []) $2)] }
+  | VarName PatList "=" Expr "where" DeclBlock
+  { [LocalDecl $6 [EquationDecl $3 $1 $2 Nothing $4]] }
+  | VarName PatList GuardEqRhs "where" DeclBlock
+  { [LocalDecl $5 (map (\f -> f $1 $2) $3)] }
+
+GuardEqRhs :: { [Name -> [Pattern] -> Decl] }
+  : "|" Expr "=" Expr
+  { [\ n p -> EquationDecl $1 n p (Just $2) $4] }
+  | GuardEqRhs "|" Expr "=" Expr
+  { $1 ++ [\ n p -> EquationDecl $2 n p (Just $3) $5] }
+
+PatList :: { [Pattern] }
+  : APat
+  { [$1] }
+  | PatList APat
+  { $1 ++ [$2] }
+
+-- Patterns
+Pat :: { Pattern }
+  : AppPat
+  { $1 }
+  | Pat VarSymId AppPat
+  { case $1 of
+      PatInfix f others -> PatInfix f (others ++ [($2, $3)])
+      _                 -> PatInfix $1 [($2,$3)] }
+
+AppPat :: { Pattern }
+  : APat
+  { $1 }
+  | AppPat APat
+  { PatApply $1 [$2] }
+
+APat :: { Pattern }
+  : VarId
+  { PatRef $1 }
+  | "_"
+  { PatBlank }
+  | VarId "@" APat
+  { PatNamed $1 $3 }
+  | ConName
+  { PatRef $1 }
+  | ConName "[" "]"
+  { PatStruct $1 [] }
+  | ConName "[" PatFields "]"
+  { PatStruct $1 $3 }
+  | "(" TuplePat ")"
+  { PatTuple $2 }
+  | "(" Pat "::" Type ")"
+  { PatTyped $2 $4 }
+  | "(" Pat ")"
+  { $2 }
+  | Literal
+  { PatConst $1 }
+
+TuplePat :: { [Pattern] }
+  : Pat "," Pat
+  { [$1, $3] }
+  | TuplePat "," Pat
+  { $1 ++ [$3] }
+
+PatFields :: { [(Name, Maybe Pattern)] }
+  : Id
+  { [($1, Nothing)] }
+  | Id "=" Pat
+  { [($1, Just $3)] }
+  | PatFields "," Id
+  { $1 ++ [($3, Nothing)] }
+  | PatFields "," Id "=" Pat
+  { $1 ++ [($3, Just $5)] }
+
 -- Expressions
+
 Expr :: { Expr }
-  : AtomicExpr
+  : ApplicExpr
+  { $1 }
+  | LetExpr
+  { $1 }
+  | IfExpr
+  { $1 }
+  | CaseExpr
   { $1 }
 
+ApplicExpr :: { Expr }
+  : "\\" PatList "->" Expr
+  { ExprLambda $1 $2 $4 }
+  | "do" Block
+  { ExprDo $1 $2 }
+  | InfExpr
+  { $1 }
+  | InfExpr "::" AppliedType
+  { ExprType $2 $1 $3 }
+
+InfExpr :: { Expr }
+  : AppExpr
+  { $1 }
+  | InfExpr Op AppExpr
+  { case $1 of
+      ExprInfix l others -> ExprInfix l (others ++ [($2, $3)])
+      _                  -> ExprInfix $1 [($2, $3)] }
+
+AppExpr :: { Expr }
+  : AtomicExpr
+  { $1 }
+  | AppExpr AtomicExpr
+  { ExprApply $1 [$2] }
+
+LetExpr :: { Expr }
+  : "let" DeclBlock "in" Expr
+  { ExprLet $1 $2 $4 }
+
+IfExpr :: { Expr }
+  : "if" Expr "then" Expr "else" Expr
+  { ExprIf $1 $2 $4 $6 }
+  | "if" "<-" Expr "then" Expr "else" Expr
+  { ExprIfM $1 $3 [StmtExpr $5] [StmtExpr $7] }
+  | "if" "<-" Expr "then" Block "else" Block
+  { ExprIfM $1 $3 $5 $7 }
+
+CaseExpr :: { Expr }
+  : "case" Expr "of" ExprAlts
+  { ExprCase $1 $2 $4 }
+  | "case" "<-" Expr "of" BlockAlts
+  { ExprCaseM $1 $3 $5 }
+
 AtomicExpr :: { Expr }
+  : QVarName
+  { ExprRef $1 }
+  | QConName
+  { ExprRef $1 }
+  | Literal
+  { ExprConst $1 }
+  | AtomicExpr "." Id
+  { ExprFldRef $2 $1 $3 }
+  | "(" Expr ")"
+  { $2 }
+  | "(" InfExpr Op ")"
+  { ExprApply (ExprRef $3) [$2] }
+  | "(" Op Expr ")"
+  { ExprApply (ExprRef $2) [$3] } -- FIXME
+  | "(" TupleExprCommas ")"
+  { ExprTuple $1 $2 }
+  | AtomicExpr "[" FieldInits "]"
+  { $3 $2 $1 }
+
+FieldInits :: { Posn -> Expr -> Expr }
+  : Fields
+  { \ s x -> ExprUpdate s x $1 }
+  | StructFldInit
+  { \ s x -> ExprBuild s x $1 }
+
+Fields :: { [(Name, Maybe Expr)] }
+  : VarName
+  { [($1, Nothing)] }
+  | VarName "=" Expr
+  { [($1, Just $3)] }
+  | Fields "|" VarName
+  { $1 ++ [($3, Nothing)] }
+  | Fields "|" VarName "=" Expr
+  { $1 ++ [($3, Just $5)] }
+
+TupleExprCommas :: { [Expr] }
+  : Expr "," Expr
+  { [$1, $3] }
+  | TupleExprCommas "," Expr
+  { $1 ++ [$3] }
+
+StructFldInit :: { [(Name, Expr)] }
+  : VarName "<-" Expr
+  { [($1, $3)] }
+  | StructFldInit "|" VarName "<-" Expr
+  { $1 ++ [($3, $5)] }
+
+Literal :: { ConstVal }
   : int
   { translateConst $1 }
   | float
   { translateConst $1 }
   | vec
   { translateConst $1 }
-  | VarName
-  { ExprRef $1 }
+  | "(" ")"
+  { ConstUnit $1 }
+  | "#." Id
+  { ConstLabel $1 $2 }
+
+-- case exp/stmt stuff
+
+ExprAlts :: { [ExprCase] }
+  : "{" SemiSepAltExprs "}"
+  { $2 }
+
+SemiSepAltExprs :: { [ExprCase] }
+  : AltExpr
+  { $1 }
+  | SemiSepAltExprs ";" AltExpr
+  { $1 ++ $3 }
+
+AltExpr :: { [ExprCase] }
+  : Pat ExprRhs1
+  { map (\ f -> f $1) $2 }
+  | Pat ExprRhs1 "where" DeclBlock
+  { [EWhereCase $4 (map (\ f -> f $1) $2)] }
+
+ExprRhs1 :: { [Pattern -> ExprCase] }
+  : "->" Expr
+  { [\ p -> ECase p Nothing $2] }
+  | GuardListExpr
+  { $1 }
+
+GuardListExpr :: { [Pattern -> ExprCase] }
+  : "|" Expr "->" Expr
+  { [\ p -> ECase p (Just $2) $4]  }
+  | GuardListExpr "|" Expr "->" Expr
+  { $1 ++ [\ p -> ECase p (Just $3) $5] }
+
+BlockAlts :: { [BlockCase] }
+  : "{" SemiSepAltBlocks "}"
+  { $2 }
+
+SemiSepAltBlocks :: { [BlockCase] }
+  : AltBlock
+  { $1 }
+  | SemiSepAltBlocks ";" AltBlock
+  { $1 ++ $3 }
+
+AltBlock :: { [BlockCase] }
+  : Pat BlockRhs1
+  { map (\ f -> f $1) $2 }
+  | Pat BlockRhs1 "where" DeclBlock
+  { [BWhereCase $4 (map (\ f -> f $1) $2)] }
+
+BlockRhs1 :: { [Pattern -> BlockCase] }
+  : "->" Block
+  { [\ p -> BCase p Nothing $2] }
+  | GuardListBlock
+  { $1 }
+
+GuardListBlock :: { [Pattern -> BlockCase] }
+  : "|" Expr "->" Block
+  { [\ p -> BCase p (Just $2) $4]  }
+  | GuardListBlock "|" Expr "->" Block
+  { $1 ++ [\ p -> BCase p (Just $3) $5] }
+
+-- Statements
+
+Block :: { [Statement] }
+  : "{" Statements "}"
+  { $2 }
+
+Statements :: { [Statement] }
+  : Statement ";" Statements
+  { $1 : $3 }
+  | VarId "<-" Statement ";" Statements
+  { StmtBind $2 $1 $3 : $5 }
+  | "let" DeclBlock ";" Statements
+  { StmtLet $1 $2 [] : $4 }
+  | Statement
+  { [$1] }
+
+Statement :: { Statement }
+  : Expr
+  { StmtExpr $1 }
+  | "let" DeclBlock "in" Block
+  { StmtLet $1 $2 $4 }
+  | "if" Expr "then" Block
+  { StmtIf $1 $2 $4 [] }
+  | "if" Expr "then" Block "else" Block
+  { StmtIf $1 $2 $4 $6 }
+  | "case" Expr "of" BlockAlts
+  { StmtCase $1 $2 $4 }
+  -- The case<- item should be covered by Expr, above
 
 -- Types
 
-Type :: { Type }
-  : TupleType "::" Kind
-  { TypeKind $1 $3 }
-  | TupleType
-  { $1 }
-
-UnkindedType :: { Type }
-  : TupleType
-  { $1 }
-
-TupleType :: { Type }
-  : "(" TupleTypeCommas ")"
-  { TypeTuple $2 }
-  | InfixType
-  { $1 }
-
-TupleTypeCommas :: { [Type] }
-  : TupleType "," TupleType
-  { [$1, $3] }
-  | TupleTypeCommas "," TupleType
-  { $1 ++ [$3] }
-
-InfixType :: { Type }
-  : InfixType TyOp AppliedType
-  { TypeApp (TypeRef $2) [$1, $3] }
-  | AppliedType
-  { $1 }
-
-AppliedType :: { Type }
-  : AppliedType AtomicType
-  { TypeApp $1 [$2] }
-  | AtomicType
-  { $1 }
-
 AtomicType :: { Type }
-  : ConName
+  : TyCon
   { TypeRef $1 }
-  | varid
-  { TypeRef (startName $1) }
+  | VarId
+  { TypeRef $1 }
   | "(" ")"
   { TypeUnit }
   | int
   { let IntConst _ v _ = $1 in TypeInt v }
   | "#." Id
   { TypeLabel $2 }
-  | "(" TyOp ")"
-  { TypeRef $2 }
   | "(" Type ")"
   { $2 }
+  | "(" Type "::" Kind ")"
+  { TypeKind $2 $4 }
+  | "(" TupleTypeCommas ")"
+  { TypeTuple $2 }
+
+AppliedType :: { Type }
+  : AtomicType
+  { $1 }
+  | AppliedType AtomicType
+  { TypeApp $1 [$2] }
+
+Type :: { Type }
+  : AppliedType
+  { $1 }
+  | Type TyOp AppliedType
+  { case $1 of
+      TypeInfix f others -> TypeInfix f (others ++ [($2, $3)])
+      _                  -> TypeInfix $1 [($2, $3)] }
+
+TupleTypeCommas :: { [Type] }
+  : Type "," Type
+  { [$1, $3] }
+  | TupleTypeCommas "," Type
+  { $1 ++ [$3] }
 
 -- Kinds
 
@@ -407,524 +828,150 @@ AtomicKind :: { Kind }
   | "(" Kind ")"
   { $2 }
 
-
 --
-
-VarSymId :: { Name }
-  : varsymid
-  { startName $1 }
-  | "*"
-  { Name $1 False [] "*" }
-  | "/"
-  { Name $1 False [] "/" }
-  | ":#"
-  { Name $1 False [] ":#" }
 
 VarId :: { Name }
   : varid
   { startName $1 }
   | "as"
-  { Name $1 False [] "as" }
+  { Name $1 [] "as" }
   | "hiding"
-  { Name $1 False [] "hiding" }
-  | "import"
-  { Name $1 False [] "import" }
+  { Name $1 [] "hiding" }
   | "lab"
-  { Name $1 False [] "lab" }
+  { Name $1 [] "lab" }
   | "module"
-  { Name $1 False [] "module" }
+  { Name $1 [] "module" }
   | "qualified"
-  { Name $1 False [] "qualified" }
+  { Name $1 [] "qualified" }
 
-ModName :: { Name }
+QVarId :: { Name }
+  : VarId
+  { $1 }
+  | qvarid
+  { startName $1 }
+
+VarSymId :: { Name }
+  : varsymid
+  { startName $1 }
+  | "*"
+  { Name $1 [] "*" }
+  | "/"
+  { Name $1 [] "/" }
+
+QVarSymId :: { Name }
+  : VarSymId
+  { $1 }
+  | qvarsymid
+  { startName $1 }
+
+ConId :: { Name }
   : conid
   { startName $1 }
-  | ModName "." conid
-  { addName $1 $3 }
+
+ConSymId :: { Name }
+  : consymid
+  { startName $1 }
+  | ":#"
+  { Name $1 [] ":#" }
 
 VarName :: { Name }
   : VarId
   { $1 }
   | "(" VarSymId ")"
   { $2 }
-  | "(" consymid ")"
-  { startName $2 }
-  | ModName "." VarId
-  { addName' $1 $3 }
-  | ModName
+
+QVarName :: { Name }
+  : VarName
   { $1 }
-  | ModName "." "(" VarSymId ")"
-  { addName' $1 $4 }
-  | ModName "." "(" consymid ")"
-  { addName $1 $4 }
+  | qvarid
+  { startName $1 }
 
 ConName :: { Name }
-  : ModName
+  : ConId
   { $1 }
-  | ModName "." "(" consymid ")"
-  { addName $1 $4 }
+  | "(" ConSymId ")"
+  { $2 }
 
-TyOp :: { Name }
-  : consymid
+QConName :: { Name }
+  : ConName
+  { $1 }
+  | qconid
   { startName $1 }
-  | varsymid
-  { startName $1 }
-  | "`" conid "`"
-  { startName $2 }
-  | ModName "." consymid
-  { addName $1 $3 }
-  | ModName "." varsymid
-  { addName $1 $3 }
-  | ModName "." "`" conid "`"
-  { addName $1 $4 }
-  | "->"
-  { Name $1 False [] "->" }
 
-TyVar :: { Name }
-  : varid
+VarSymName :: { Name }
+  : VarSymId
+  { $1 }
+  | "`" VarName "`"
+  { $2 }
+
+QVarSymName :: { Name }
+  : QVarSymId
+  { $1 }
+  | "`" QVarName "`"
+  { $2 }
+
+ConSymName :: { Name }
+  : ConSymId
+  { $1 }
+  | "`" ConName "`"
+  { $2 }
+
+QConSymName :: { Name }
+  : ConSymName
+  { $1 }
+  | qconsymid
   { startName $1 }
-  | "_"
-  { Name $1 False [] "_" }
 
 Id :: { Name }
-  : varid
+  : VarId
+  { $1 }
+  | ConId
+  { $1 }
+
+Op :: { Name }
+  : VarSymName
+  { $1 }
+  | ConSymName
+  { $1 }
+
+TyCon :: { Name }
+  : QConName
+  { $1 }
+  | "(" QVarSymId ")"
+  { $2 }
+  | "(" "->" ")"
+  { Name $2 [] "->" }
+
+TyConOp :: { Name }
+  : QConSymName
+  { $1 }
+  | QVarSymId
+  { $1 }
+  | "->"
+  { Name $1 [] "->" }
+
+TyOp :: { Name }
+  : TyConOp
+  { $1 }
+  | "`" QVarId "`"
+  { $2 }
+
+ModName :: { Name }
+  : ConId
+  { $1 }
+  | qconid
   { startName $1 }
-  | conid
-  { startName $1 }
 
-
-{-
-
-OLDRULES
-
-Decl        | Equation                    { 1 }
-
-TopDecl     : Decl                        { 1 }
-            | ClassDecl                   { 1 }
-            | InstanceDecl                { 1 }
-            | DataDecl                    { 1 }
-            | BitdataDecl                 { 1 }
-            | StructDecl                  { 1 }
-            | AreaDecl                    { 1 }
-
--- These are defined in the Nov10 Habit report, page 29
-Equation    : EqLhs EqRhs                 { 1 }
-
-EqLhs       : Var OptPatList              { 1 }
-
-OptPatList  :                             { 1 }
-            | OptPatList APat             { 1 }
-
-EqRhs       : EqRhs1 OptWhere             { 1 }
-
-EqRhs1      : "=" Expr                    { 1 }
-            | GuardEqRhs                  { 1 }
-
-GuardEqRhs  : "|" Expr "=" Expr             { 1 }
-            | GuardEqRhs "|" Expr "=" Expr  { 1 }
-
--- These are defined in the Nov10 Habit report, page 30
-CommaOpList : Op                                { 1 }
-            | CommaOpList "," Op                { 1 }
-
-CommaTyopList : Tyop                            { 1 }
-              | CommaTyopList "," Tyop          { 1 }
-
--- These are defined in the Nov10 Habit report, page 31
-ClassDecl   : "class" ClassLhs OptConstraints OptWhere  { 1 }
-
-OptConstraints :                            { 1 }
-               | "|" CommaConstList         { 1 }
-
-CommaConstList : Constraint                    { 1 }
-               | CommaConstList "," Constraint { 1 }
-
-ClassLhs    : TypeLhs OptParam                  { 1 }
-
-OptParam    : "=" TypeParam                     { 1 }
-
-TypeLhs     : TypeParam Tyconop TypeParam       { 1 }
-            | PreTypeLhs                        { 1 }
-
-PreTypeLhs  : Tycon                             { 1 }
-            | PreTypeLhs TypeParam              { 1 }
-
-TypeParam   : Var                               { 1 }
-            | "(" TypeParam OptKind ")"         { 1 }
-
-OptKind     :                                   { 1 }
-            | Kind                              { 1 }
-
-Constraint  : FunDep                            { 1 }
-            | Con ConstArgs                     { 1 }
-            | "(" Preds ")"                     { 1 }
-
-ConstArgs   : Type                              { 1 }
-            | ConstArgs Type                    { 1 }
-
-FunDep      : OptListVar "->" ListVar           { 1 }
-
-OptListVar  :                                   { 1 }
-            | ListVar                           { 1 }
-
-ListVar     : Var                               { 1 }
-            | ListVar Var                       { 1 }
-
--- These are defined in the Nov10 Habit report, page 33
-InstanceDecl
-            : "instance" Instances              { 1 }
-
-Instances   : Instance                          { 1 }
-            | Instances "else" Instance         { 1 }
-
-Instance    : Pred OptIfPreds OptWhere          { 1 }
-
-OptIfPreds  : "if" Preds                        { 1 }
-
-
--- These are defined in the Nov10 Habit report, page 38
-DataDecl    : "data" TypeLhs OptConst OptDerive
-                                          { 1 }
-
-OptConst    :                             { 1 }
-            | "=" DataCons                { 1 }
-
-DataCons    : DataCon                     { 1 }
-            | DataCons "|" DataCon        { 1 }
-
-OptDerive   :                             { 1 }
-            | "deriving" DeriveList       { 1 }
-
-DataCon     : DataCon Conop Type          { 1 }
-            | PreDataCon                  { 1 }
-
-PreDataCon  : Con                         { 1 }
-            | PreDataCon AType            { 1 }
-            | "(" DataCon ")"             { 1 }
-
-DeriveList  : Con                         { 1 }
-            | "(" Cons ")"                { 1 }
-
-Cons        : Con                         { 1 }
-            | Cons "," Con                { 1 }
-
--- These are defined in the Nov10 Habit report, page 39
-BitdataDecl : "bitdata" conid OptSlType OptBCons OptDerive
-                                          { 1 }
-
-OptSlType   :                             { 1 }
-            | "/" Type                    { 1 }
-
-OptBCons    :                             { 1 }
-            | "=" BCons                   { 1 }
-
-BCons       : BitdataCon                  { 1 }
-            | BCons "|" BitdataCon        { 1 }
-
-BitdataCon  : Con "[" BDataFields "]"     { 1 }
-
-BDataFields : BitdataField                { 1 }
-            | BDataFields "|" BitdataField
-                                          { 1 }
-
-BitdataField
-            : varid "::" AppType          { 1 }
-            | varid "=" Expr "::" AppType { 1 }
-            | Expr                        { 1 }
-
--- These are defined in the Nov10 Habit report, page 44.
-StructDecl  : "struct" conid OptSlType "[" SRegions "]" OptDerive
-                                          { 1 }
-
-SRegions    : StructRegion                { 1 }
-            | SRegions "|" StructRegion   { 1 }
-
-StructRegion
-            : OptFieldNames Type          { 1 }
-
-OptFieldNames
-            :                             { 1 }
-            | StrFields "::"              { 1 }
-
-StrFields   : StructField                 { 1 }
-            | StrFields "," StructField   { 1 }
-
-StructField : Id OptInit                  { 1 }
-
-OptInit     :                             { 1 }
-            | "<-" Expr                   { 1 }
-
--- These are defined in the Nov10 Habit report, page 44.
-AreaDecl    : "area" AreaVars "::" Type OptWhere
-                                          { 1 }
-
-AreaVars    : AreaVar                     { 1 }
-            | AreaVars "," AreaVar        { 1 }
-
-AreaVar     : Var OptInit                 { 1 }
-
--- These are defined in the Nov10 Habit report, page 23. I've
--- switched the Stmts to be left-recursive instead of right, which
--- will admit incorrect programs. But those are easily checked for
--- later.
-Block       : "{" Stmts "}"               { 1 }
-
-Stmts       : Stmt                        { 1 }
---            | Stmts ";" "let" DeclBlock   { 1 }
---            | Stmts ";" OptAssign Stmt    { 1 }
-
-OptAssign   :                             { 1 }
-            | Var "<-"                    { 1 }
-
--- These are defined in the Nov10 Habit report, page 22
-Stmt        : Applic                      { 1 }
-            | LetStmt                     { 1 }
-            | IfStmt                      { 1 }
-            | CaseStmt                    { 1 }
-
-
--- These are defined in the Nov10 Habit report, page 22
-Expr        : Applic                      { 1 }
-            | LetExpr                     { 1 }
-            | IfExpr                      { 1 }
-            | CaseExpr                    { 1 }
-
--- These are defined in the Nov10 Habit report, page 22
-Applic      : "\\" APatList "->" Expr     { 1 }
-            | "do" Block                  { 1 }
-            | InfExpr OptType             { 1 }
-
-APatList    : APat                        { 1 }
-            | APatList APat               { 1 }
-
-OptType     :                             { 1 }
-            | "::" Type                   { 1 }
-
-InfExpr     : AppExpr InfixOpList         { 1 }
-
-InfixOpList :                             { 1 }
-            | InfixOpList Op AppExpr      { 1 }
-
-AppExpr     : AExpr                       { 1 }
-            | AppExpr AExpr               { 1 }
-
-AExpr       : Var                         { 1 }
-            | Con                         { 1 }
-            | Literal                     { 1 }
-            | AExpr "." Id                { 1 }
-            | AExpr "[" Fields "]"        { 1 }
-            | "(" ")"                     { 1 }
-            | "(" Expr ")"                { 1 }
-            | "(" AExpr Op ")"            { 1 }
-            | "(" Op AExpr ")"            { 1 }
-            | "(" TupleExprs ")"          { 1 }
-            | conid "[" StructFldInit "]" { 1 }
-
-TupleExprs  : Expr "," Expr               { 1 }
-            | TupleExprs "," Expr         { 1 }
-
-StructFldInit : Id "<-" Expr                    { 1 }
-              | StructFldInit "|" Id "<-" Expr  { 1 }
-
-Fields        : Id OptFieldInit              { 1 }
-              | Fields "|" Id OptFieldInit   { 1 }
-
-OptFieldInit  :                           { 1 }
-              | "=" Expr                  { 1 }
-
-Literal     : int                         { 1 }
-            | vec                         { 1 }
-            | float                       { 1 }
-            | "#." Id                     { 1 }
-
--- These are defined in the Nov10 Habit report, page 24
-LetExpr     : "let" DeclBlock "in" Expr   { 1 }
-
-LetStmt     : "let" DeclBlock "in" Block  { 1 }
-
-DeclBlock   : "{" OptDecls "}"            { 1 }
-
-OptDecls    :                             { 1 }
-            | SemiSepDecls                { 1 }
-
-SemiSepDecls : Decl                       { 1 }
-             | SemiSepDecls ";" Decl      { 1 }
-
--- These are defined in the Nov10 Habit report, page 25
-IfExpr      : "if" Expr "then" Expr "else" Expr     { 1 }
-            | IfFrom                                { 1 }
-
-IfStmt      : "if" Expr "then" Block OptElseBlock   { 1 }
-            | IfFrom                                { 1 }
-
-IfFrom      : "if" "<-" Stmt "then" Block OptElseBlock { 1 }
-
-OptElseBlock :                              { 1 }
-             | "else" Block                 { 1 }
-
-CaseExpr    : "case" Expr "of" ExprAlts     { 1 }
-            | CaseFrom                      { 1 }
-
-CaseStmt    : "case" Expr "of" BlockAlts    { 1 }
-            | CaseFrom                      { 1 }
-
-CaseFrom    : "case" "<-" Stmt "of" BlockAlts { 1 }
-
-ExprAlts    : "{" SemiSepAltExprs "}"       { 1 }
-
-BlockAlts   : "{" SemiSepAltBlocks "}"      { 1 }
-
-SemiSepAltExprs : AltExpr                           { 1 }
-                | SemiSepAltExprs ";" AltExpr       { 1 }
-
-SemiSepAltBlocks : AltBlock                        { 1 }
-                 | SemiSepAltBlocks ";" AltBlock   { 1 }
-
-AltExpr : Pat ExprRhs1 OptWhere                     { 1 }
-
-ExprRhs1 : "->" Expr                                { 1 }
-         | GuardListExpr                            { 1 }
-
-OptWhere : "where" DeclBlock                        { 1 }
-
-GuardListExpr : "|" Expr "->" Expr                  { 1 }
-              | GuardListExpr "|" Expr "->" Expr    { 1 }
-
-AltBlock : Pat BlockRhs1 OptWhere                   { 1 }
-
-BlockRhs1 : "->" Block                              { 1 }
-          | GuardListBlock                          { 1 }
-
-GuardListBlock : "|" Expr "->" Block                { 1 }
-               | GuardListBlock "|" Expr "->" Block { 1 }
-
--- These are defined in the Nov10 Habit report, page 26
-Pat         : AppPat                      { 1 }
-            | Pat Op AppPat               { 1 }
-
-AppPat      : APat                        { 1 }
-            | AppPat APat                 { 1 }
-
-APat        : Var                         { 1 }
-            | "_"                         { 1 }
-            | Var "@" APat                { 1 }
-            | Con                         { 1 }
-            | Con "[" PatFields "]"       { 1 }
-            | "(" TuplePat ")"            { 1 }
-            | "(" Pat "::" Type ")"       { 1 }
-            | "(" Pat ")"                 { 1 }
-            | Literal                     { 1 }
-
-TuplePat    : Pat "," Pat                 { 1 }
-            | TuplePat "," Pat            { 1 }
-
-PatFields   :                             { 1 }
-            | PatFieldsComma              { 1 }
-
-PatFieldsComma
-            : Id OptEqPat                 { 1 }
-            | PatFieldsComma Id OptEqPat  { 1 }
-
-OptEqPat    :                             { 1 }
-            | "=" Pat                     { 1 }
-
-
-
--}
 
 {
 
-data HabitModule = HabitModule Name [Decl]
- deriving (Show)
+happyError :: [Lexeme] -> a
+happyError []    = error "Parse error at end of file!"
+happyError (x:_) =
+  error (show (getPosn x) ++ ": Parse error around " ++ show (getToken x))
 
-data Decl        = ImportDecl AlexPosn Bool Name (Maybe Name) ImportMods
-                 | FixityDecl AlexPosn FixityType Bool (Maybe Integer) [Name]
-                 | TypeSigDecl AlexPosn Name Type
-                 | TypeDecl AlexPosn Type Type
-                 | StructDecl AlexPosn Name (Maybe Type) [StructField] [Name]
- deriving (Show)
-
-data ImportMods = IncludeOnly [Name]
-                | HidingNames [Name]
-                | NoMods
- deriving (Show)
-
-data FixityType = FixityLeft | FixityRight | FixityBoth
-  deriving (Show)
-
-type StructField = (Maybe Name, Maybe Expr, Type)
-
-data Expr = ExprConst ConstVal
-          | ExprRef Name
-  deriving (Show)
-
-data Type = WithPredicates [Predicate] Type
-          | TypeRef Name
-          | TypeUnit
-          | TypeInt Integer
-          | TypeLabel Name
-          | TypeKind Type Kind
-          | TypeApp Type [Type]
-          | TypeTuple [Type]
-  deriving (Show)
-
-data Kind = KindStar | KindType | KindNat | KindArea | KindLabel
-          | KindFun Kind Kind
-  deriving (Show)
-
-data ConstVal = ConstInt AlexPosn Integer Int
-              | ConstVec AlexPosn Integer Int Int
-              | ConstFloat AlexPosn Float
-              | ConstDouble AlexPosn Double
-  deriving (Show)
-
-translateConst :: Lexeme -> Expr
-translateConst (IntConst a b c) = ExprConst (ConstInt a b c)
-translateConst (VecConst a b c d) = ExprConst (ConstVec a b c d)
-translateConst (FloatConst a (FVal f)) = ExprConst (ConstFloat a f)
-translateConst (FloatConst a (DVal d)) = ExprConst (ConstDouble a d)
-translateConst _ = error "Incorrect lexeme to translateConst"
-
-data Predicate = Predicate Type (Maybe Type) Bool
-  deriving (Show)
-
-buildPredicate :: Type -> (Maybe Type) -> Bool -> [Predicate]
-buildPredicate (TypeTuple ps) Nothing False =
-  concatMap (\ x -> buildPredicate x Nothing False) ps
-buildPredicate (TypeTuple _) _ _ =
-  error "Unexpected tuple in predicate position."
-buildPredicate x@(TypeApp _ _) y z = [Predicate x y z]
-buildPredicate _ _ _ =
-  error "Unexpected type in predicate position."
-
-data Name       = Name AlexPosn Bool [String] String
- deriving (Show)
-
-defaultMod :: Name
-defaultMod = Name nopos True [] "Main"
-
-startName :: Lexeme -> Name
-startName (ReservedId p x)    = Name p False [] x
-startName (ReservedSym p x m) = Name p m [] x
-startName (VarId p bs)        = Name p False [] (fromBS bs)
-startName (ConId p bs)        = Name p False [] (fromBS bs)
-startName (VarSymId p bs)     = Name p False [] (fromBS bs)
-startName (ConSymId p bs)     = Name p False [] (fromBS bs)
-startName x                   = error ("Bad token for startName: " ++ show x)
-
-addName :: Name -> Lexeme -> Name
-addName (Name p m ls x) t = Name p m (ls ++ [x]) y
- where Name _ _ _ y = startName t
-
-addName' :: Name -> Name -> Name
-addName' (Name p1 m1 ls1 x1) (Name _ m2 ls2 x2) =
-  Name p1 (m1 && m2) (ls1 ++ [x1] ++ ls2) x2
-
-happyError :: Alex a
-happyError = fail "Parse Failed"
-
-fromBS :: ByteString -> String
-fromBS = map (chr . fromIntegral) . unpack
+parse :: Maybe FilePath -> ByteString -> HabitModule
+parse source bytes = parseHabit (scanWithLayout source bytes)
 
 }
 

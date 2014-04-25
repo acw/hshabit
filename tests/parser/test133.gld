@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [EquationDecl <test133.hbt:1:7> (Name <test133.hbt:1:1> [] "x") [PatBlank,PatBlank] Nothing (ExprConst (ConstInt <test133.hbt:1:9> 4 10))]

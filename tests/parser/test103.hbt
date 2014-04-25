@@ -1,0 +1,5 @@
+foo x y | 9 =  4
+        | 10 = 6
+ where
+   z :: Int
+   z = 9

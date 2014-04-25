@@ -1,0 +1,1 @@
+class Foo a b | Bar a, Goo b, -> a b

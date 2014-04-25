@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [FixityDecl <test019.hbt:1:1> FixityBoth False (Just 4) [Name <test019.hbt:1:9> [] "==",Name <test019.hbt:1:13> [] "/="]]

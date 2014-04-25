@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [BitdataDecl <test064.hbt:1:1> (Name <test064.hbt:1:9> [] "S") Nothing [(Name <test064.hbt:1:13> [] "B",[Left (ExprConst (ConstInt <test064.hbt:1:17> 0 10))]),(Name <test064.hbt:1:23> [] "C",[Left (ExprConst (ConstVec <test064.hbt:1:27> 15 2 4))])] []]

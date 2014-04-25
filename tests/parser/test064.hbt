@@ -1,0 +1,1 @@
+bitdata S = B [ 0 ] | C [ B1111 ]

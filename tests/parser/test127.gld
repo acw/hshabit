@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [EquationDecl <test127.hbt:1:3> (Name <test127.hbt:1:1> [] "x") [] Nothing (ExprIfM <test127.hbt:1:5> (ExprRef (Name <test127.hbt:1:10> [] "a")) [StmtExpr (ExprRef (Name <test127.hbt:2:12> [] "b"))] [StmtExpr (ExprRef (Name <test127.hbt:3:12> [] "no"))])]

@@ -1,0 +1,1 @@
+bitdata R/8 = A [ x :: Bit 4 | 0 ]

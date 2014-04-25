@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [TypeSigDecl <test018.hbt:1:3> (Name <test018.hbt:1:1> [] "a") (TypeInfix (TypeRef (Name <test018.hbt:1:6> [] "n")) [(Name <test018.hbt:1:8> [] "+",TypeRef (Name <test018.hbt:1:10> [] "m"))])]

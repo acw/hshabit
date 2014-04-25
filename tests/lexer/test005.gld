@@ -1,0 +1,13 @@
+lexeme:<->:RSym:{
+lexeme:<test005.hbt:1:1>:VarId:foo
+lexeme:<test005.hbt:1:5>:RSym:=
+lexeme:<test005.hbt:1:7>:RId:let
+lexeme:<->:RSym:{
+lexeme:<test005.hbt:1:11>:VarId:x
+lexeme:<test005.hbt:1:13>:RSym:=
+lexeme:<test005.hbt:1:15>:Int:base10:4
+lexeme:<->:RSym:}
+lexeme:<test005.hbt:1:17>:RId:in
+lexeme:<test005.hbt:1:20>:VarId:x
+lexeme:<->:RSym:;
+lexeme:<->:RSym:}

@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [TypeSigDecl <test039.hbt:1:3> (Name <test039.hbt:1:1> [] "b") (TypeTuple [TypeRef (Name <test039.hbt:1:7> [] "Int"),TypeRef (Name <test039.hbt:1:12> [] "Float"),TypeInfix (TypeRef (Name <test039.hbt:1:19> [] "Int")) [(Name <test039.hbt:1:23> [] "->",TypeRef (Name <test039.hbt:1:26> [] "Int"))]])]

@@ -1,0 +1,1 @@
+instance Foo a fails if Bar a

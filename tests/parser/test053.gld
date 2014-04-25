@@ -1,0 +1,1 @@
+HabitModule (Name <-> [] "Main") [StructDecl <test053.hbt:1:1> (Name <test053.hbt:1:8> [] "S") Nothing [(Just (Name <test053.hbt:1:12> [] "x"),Just (ExprConst (ConstInt <test053.hbt:1:17> 0 10)),TypeRef (Name <test053.hbt:1:22> [] "Int"))] []]
