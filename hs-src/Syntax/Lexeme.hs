@@ -2,7 +2,10 @@ module Syntax.Lexeme
  where
 
 import Data.ByteString.Lazy(ByteString, unpack)
+import Data.ByteString.Lazy.Char8(pack)
 import Data.Char(chr)
+import Data.List(intercalate)
+import Misc.Output
 import Syntax.Posn
 
 data Lexeme = ReservedId  Posn String
@@ -20,6 +23,9 @@ data Lexeme = ReservedId  Posn String
             | FloatConst  Posn FloatVal
             | EOF         Posn
  deriving (Eq)
+
+instance Output [Lexeme] where
+  toByteString ls = pack (intercalate "\n" (map show ls) ++ "\n")
 
 data FloatVal = FVal Float | DVal Double
  deriving (Eq)

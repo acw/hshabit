@@ -18,7 +18,10 @@ library
   hs-source-dirs:      hs-src
   ghc-options:         -Wall
   default-language:    Haskell2010
+  default-extensions:  FlexibleInstances
   exposed-modules:
+                       Compiler.FrontEnd.Depends,
+                       Misc.Output,
                        Syntax.Layout,
                        Syntax.Lexeme,
                        Syntax.ParseAST,

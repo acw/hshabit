@@ -13,12 +13,17 @@ module Syntax.ParseAST(
  where
 
 import Data.ByteString.Lazy(ByteString,unpack)
+import Data.ByteString.Lazy.Char8(pack)
 import Data.Char(chr)
+import Misc.Output
 import Syntax.Lexeme
 import Syntax.Posn
 
 data HabitModule = HabitModule Name [Decl]
  deriving (Show)
+
+instance Output HabitModule where
+  toByteString mdl = pack (show mdl ++ "\n")
 
 data Decl        = ImportDecl Posn Bool Name (Maybe Name) ImportMods
                  | FixityDecl Posn FixityType Bool (Maybe Integer) [Name]

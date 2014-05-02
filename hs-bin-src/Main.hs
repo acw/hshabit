@@ -1,30 +1,25 @@
-import Data.ByteString.Lazy(ByteString, pack)
+import Compiler.FrontEnd.Depends(buildMakeDepends)
+import Data.ByteString.Lazy(ByteString)
 import qualified Data.ByteString.Lazy as BS
-import Data.Char(ord)
-import Data.List(intercalate)
-import Syntax.Layout(scanWithLayout)
+import Misc.Output(Output(..))
 import Syntax.Parser(parse)
-import Syntax.Scanner(scan)
 import System.FilePath(takeFileName)
 import System.IO
 import System.ParseArgs
 import Text.PrettyPrint.ANSI.Leijen(displayIO)
 
 main :: IO ()
-main = parseCommandLine >>= runHSHabit
+main = parseCommandLine >>= \ c ->
+  case c of
+    HELP       -> displayIO stderr habitHelp
+    VERSION    -> hPutStrLn stderr "The High Speed Habit Compiler, Version 0.1"
+    LEX{}      -> runCompiler c (scanner c)
+    PARSE{}    -> runCompiler c parse
+    DEPENDS{}  -> runCompiler c buildMakeDepends
 
-runHSHabit :: Command -> IO ()
-runHSHabit Help           = displayIO stderr habitHelp
-runHSHabit Version        = hPutStrLn stderr "The High Speed Habit Compiler, Version 0.1"
-runHSHabit c@Lex{}
-  | lexEmitIndentBlocks c = runCompiler c scanWithLayout
-  | otherwise             = runCompiler c scan
-runHSHabit c@Parse{}
-                          = runCompiler c ((:[]) .+. parse)
-
-runCompiler :: Show a =>
+runCompiler :: Output a =>
                Command ->
-               (Maybe FilePath -> ByteString -> [a]) ->
+               (Maybe FilePath -> ByteString -> a) ->
                IO ()
 runCompiler cmd compiler =
   withFile (getInputFile cmd) ReadMode $ \ ihndl ->
@@ -32,13 +27,8 @@ runCompiler cmd compiler =
       do input <- BS.hGetContents ihndl
          let fname     = takeFileName (getInputFile cmd)
              output    = compiler (Just fname) input
-             outputStr = intercalate "\n" (map show output) ++ "\n"
-         BS.hPut ohndl (pack (map (fromIntegral . ord) outputStr))
+         BS.hPut ohndl (toByteString output)
 
 withOutputFile :: FilePath -> (Handle -> IO ()) -> IO ()
 withOutputFile "" action = action stdout
 withOutputFile f  action = withFile f WriteMode action
-
-(.+.) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
-f .+. g = \ a b -> f (g a b)
-
