@@ -11,12 +11,12 @@ import Data.Maybe(catMaybes)
 import Misc.Output
 import Syntax.ParseAST
 import Syntax.Parser(parse)
-import System.FilePath(joinPath, (</>), (<.>))
+import System.FilePath(joinPath, replaceExtension, (</>), (<.>))
 
 data MakeDepend = MD FilePath FilePath
 
 instance Output [MakeDepend] where
-  toByteString ls = pack (intercalate "\n" (map show ls))
+  toByteString ls = pack (intercalate "\n" (map show ls) ++ "\n")
 
 instance Show MakeDepend where
   show (MD a b) = a ++ ": " ++ b
@@ -29,7 +29,8 @@ buildMakeDepends Nothing bstr = buildMakeDepends (Just "Main.hbt") bstr
 buildMakeDepends f@(Just srcfile) bstr = dependClauses
  where
   hbtmod = parse f bstr
-  dependClauses = map (MD srcfile) depends
+  srcfile' = replaceExtension srcfile "o"
+  dependClauses = map (MD srcfile') depends
   depends = getDepends hbtmod
 
 gdDecl :: Decl -> Maybe FilePath
