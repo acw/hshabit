@@ -36,7 +36,7 @@ data Decl        = ImportDecl Posn Bool Name (Maybe Name) ImportMods
                  | InstanceDecl Posn [Instance]
                  | DataDecl Posn Type [Type] [Name] [Constraint]
                  | EquationDecl Posn Name [Pattern] (Maybe Expr) Expr
-                 | LocalDecl [Decl] [Decl]
+                 | LocalDecl Posn [Decl] [Decl]
  deriving (Show)
 
 data Expr = ExprConst  ConstVal

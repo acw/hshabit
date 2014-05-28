@@ -373,7 +373,7 @@ AreaDecl :: { [Decl] }
   : "area" AreaVars "::" Type
   { map (\ (n,v) -> AreaDecl $1 n v $4) $2 }
   | "area" AreaVars "::" Type "where" DeclBlock
-  { [LocalDecl $6 (map (\ (n,v) -> AreaDecl $1 n v $4) $2)] }
+  { [LocalDecl $5 $6 (map (\ (n,v) -> AreaDecl $1 n v $4) $2)] }
 
 AreaVars :: { [(Name, Maybe Expr)] }
   : AreaVar
@@ -492,13 +492,13 @@ Equation :: { [Decl] }
   | VarName PatList GuardEqRhs
   { map (\f -> f $1 $2) $3 }
   | VarName "=" Expr "where" DeclBlock
-  { [LocalDecl $5 [EquationDecl $2 $1 [] Nothing $3]] }
+  { [LocalDecl $4 $5 [EquationDecl $2 $1 [] Nothing $3]] }
   | VarName GuardEqRhs "where" DeclBlock
-  { [LocalDecl $4 (map (\f -> f $1 []) $2)] }
+  { [LocalDecl $3 $4 (map (\f -> f $1 []) $2)] }
   | VarName PatList "=" Expr "where" DeclBlock
-  { [LocalDecl $6 [EquationDecl $3 $1 $2 Nothing $4]] }
+  { [LocalDecl $5 $6 [EquationDecl $3 $1 $2 Nothing $4]] }
   | VarName PatList GuardEqRhs "where" DeclBlock
-  { [LocalDecl $5 (map (\f -> f $1 $2) $3)] }
+  { [LocalDecl $4 $5 (map (\f -> f $1 $2) $3)] }
 
 GuardEqRhs :: { [Name -> [Pattern] -> Decl] }
   : "|" Expr "=" Expr

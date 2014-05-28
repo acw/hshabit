@@ -18,10 +18,19 @@ library
   hs-source-dirs:      hs-src
   ghc-options:         -Wall
   default-language:    Haskell2010
-  default-extensions:  FlexibleInstances
+  default-extensions:  FlexibleInstances,
+                       GeneralizedNewtypeDeriving,
+                       LambdaCase,
+                       MultiParamTypeClasses
   exposed-modules:
+                       Compiler.Error,
                        Compiler.FrontEnd.Depends,
+                       Compiler.FrontEnd.Sanitize,
+                       Compiler.Monad,
+                       Compiler.Options,
+                       Compiler.Warning,
                        Misc.Output,
+                       Syntax.IL,
                        Syntax.Layout,
                        Syntax.Lexeme,
                        Syntax.ParseAST,
@@ -32,7 +41,9 @@ library
                        array >= 0.5 && < 10000,
                        base >=4.7 && <4.8,
                        bytestring >=0.10 && <0.11,
-                       filepath >=1.3 && <1.4
+                       containers >= 0.5.5.1 && < 0.7,
+                       filepath >=1.3 && <1.4,
+                       monadLib >= 3.7.3 && < 10000
 
 executable hshabit
   main-is:             Main.hs
