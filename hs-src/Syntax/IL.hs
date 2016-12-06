@@ -2,11 +2,15 @@ module Syntax.IL where
 
 import Syntax.Posn
 
-data Name = Name
+data Name = Name String Word64
 
 data HabitModule = HabitModule
 
-data Declaration = DEquation 
+data Declaration = DEquation {
+                     declName :: Name
+                   , eqType   :: Type
+                   , eqValue  :: Expression
+                   }
 
 data Statement = SExpr { stmtPosn :: Posn,
                          stmtExpr :: Expression }

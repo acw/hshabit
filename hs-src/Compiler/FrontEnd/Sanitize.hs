@@ -187,7 +187,7 @@ gatherNames (P.InstanceDecl _ _) =
 gatherNames (P.DataDecl p lhst items _ _) =
   do P.Name p' pfx n <- getNameFromTypeLhs lhst
      unless (null pfx) $ inBase $ err (TopLevelHasPrefix p' n)
-     cnames <- getConstructorNames items
+     cnames <- concat <$> mapM (getConstructorNames p) items
      forM_ cnames $ \ (P.Name cp cpfx cn) ->
        do unless (null cpfx) $ inBase $ err (ConstructorHasPrefix cp cn)
           addTopLevelName cp cn
@@ -203,10 +203,19 @@ gatherNames (P.LocalDecl _ _ xs) =
         fail "INTERNAL ERROR: Non-area decl in LocalDecl in gatherNames."
 
 getNameFromTypeLhs :: P.Type -> SanitizeM P.Name
-getNameFromTypeLhs = undefined
+getNameFromTypeLhs (TypeRef x) = return x
+getNameFromTypeLhs (TypeApp (TypeRef x) [_, _]) = return x
+getNameFromTypeLhs (TypeApp x [_]) = getNameFromType x
+getNameFromTypeLhs = fail "INTERNAL ERROR: Weird value for TypeLhs"
 
-getConstructorNames :: [P.Type] -> SanitizeM [P.Name]
-getConstructorNames = undefined
+getConstructorNames :: Posn -> [P.Type] -> SanitizeM [P.Name]
+getConstructorNames _ (TypeRef n) =
+  return [n]
+getConstructorNames _ (TypeApp x _) =
+  getConstructorNames x
+getConstructorNames p _ =
+  inBase $ err (InvalidConstructorType p)
+  return []
 
 -- ----------------------------------------------------------------------------
 --
@@ -215,25 +224,26 @@ getConstructorNames = undefined
 -- ----------------------------------------------------------------------------
 
 validateEqn :: String -> ([P.Decl], [P.Decl]) ->
-               SanitizeM (Maybe P.Decl, [P.Decl])
+               SanitizeM (Maybe P.Decl, Posn, Int, [P.Decl])
 validateEqn name ([], vdecls) =
   do inBase $ warn $ NoTypeForTopLevel name
      validateArgCount (error "validateEqn: p") (error "validateEqn: Huh?")
                       Nothing vdecls
-     return (Nothing, vdecls)
+     return (Nothing, undefined, 0, vdecls)
 validateEqn name ([td@(P.TypeSigDecl p (P.Name _ _ n) _)], vdecls) =
-  do validateArgCount p n Nothing vdecls
-     return (Just td, vdecls)
+  do count <- validateArgCount p n Nothing vdecls
+     return (Just td, p, count, vdecls)
 validateEqn name (tds@((td@(P.TypeSigDecl p (P.Name _ _ n) _)):_), vdecls) =
   do inBase $ err $ TooManyTypeSigs p n
-     validateArgCount p n Nothing vdecls
-     return (Just td, vdecls)
+     count <- validateArgCount p n Nothing vdecls
+     return (Just td, p, count, vdecls)
 
-validateArgCount :: Posn -> String -> Maybe Int -> [P.Decl] -> SanitizeM ()
+validateArgCount :: Posn -> String -> Maybe Int -> [P.Decl] -> SanitizeM Int
 validateArgCount p n Nothing [] =
-  inBase $ err $ NoEqnForTypeSig p n
-validateArgCount _ _ (Just _) [] =
-  return ()
+  do inBase $ err $ NoEqnForTypeSig p n
+     return 0
+validateArgCount _ _ (Just x) [] =
+  return x
 validateArgCount p n cnt ((P.LocalDecl _ _ ds):xs) =
   validateArgCount p n cnt (ds ++ xs)
 validateArgCount p n Nothing (P.EquationDecl _ _ ptns _ _ : rest) =
@@ -246,8 +256,34 @@ validateArgCount _ n _ d =
 
 -- ----------------------------------------------------------------------------
 
-generateEqn :: (String, EqnInfo) -> SanitizeM Declaration
-generateEqn = undefined
+generateEqn :: (String, (Maybe P.Decl, Posn, Int, [P.Decl])) ->
+               SanitizeM (Maybe Declaration)
+generateEqn (_, (_, _, _, [])) = return Nothing -- error generated before
+generateEqn (name, (mtype, _, 0, [x])) =
+  do name' <- lookupName name
+     let dtype = fromMaybe TUnknown name'
+     x' <- sanitizeE' x
+     return (Just (Declaration name' dtype x'))
+generateEqn (name, (mtype, _, 0, (_:_))) =
+  do inBase $ err (TooManyEqnsForValue p name)
+     return Nothing
+generateEqn (name, mtype, p, count, decls) =
+  do name' <- lookupName name
+     names <- replicate count gensymName
+     cases <- mapM generateEqnCase decls
+     let dtype    = fromMaybe TUnknown name'
+         lambda   = ELambda p (map (PRef p) names) caseb
+         caseb    = ECase TypeUnknown argtuple cases
+         argtuple = map (ERef p TypeUnknown) names
+     return (Just (Declaration name' dtype lambda))
+
+generateEqnCase :: P.Decl -> SanitizeM CaseArm
+generateEqnCase (LocalDecl p locals body) =
+  undefined
+generateEqnCase (EquationDecl p name ptrn mguard body) =
+  undefined
+generateEqnCase _ =
+  fail "INTERNAL ERROR: Invalid equation value reached generateEqnCase."
 
 -- ----------------------------------------------------------------------------
 
